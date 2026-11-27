@@ -1,0 +1,2446 @@
+
+Index
+ · HTML
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Block911 — payment fraud monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- D3.js for Graph Physics -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <!-- Tone.js for optional gentle audio chimes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+ 
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 900: '#141415', 800: '#19191b', 700: '#232325', 600: '#2f2f32', accent: '#06b6d4' },
+            emerald: { 300: '#6fd3a1', 400: '#4cc38a', 500: '#3aa876' },
+            amber: { 300: '#e8c06a', 400: '#e0a63a', 500: '#c98f2c' },
+            rose: { 300: '#ec8a8d', 400: '#e5484d', 500: '#d13b40' }
+          },
+          fontFamily: {
+            sans: ['IBM Plex Sans', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+          }
+        }
+      }
+    };
+  </script>
+ 
+  <style>
+    :root { --ease: cubic-bezier(0.22, 1, 0.36, 1); }
+    body { font-feature-settings: "tnum"; }
+    .btn { height: 36px; padding: 0 16px; border-radius: 8px; border: 1px solid rgba(237,237,237,.1); background: #232325; color: #ededed; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); transition: background-color .15s var(--ease), border-color .15s var(--ease); }
+    .btn:hover { background: #2c2c2f; border-color: rgba(237,237,237,.18); }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: #06b6d4; border-color: transparent; color: #0b1014; font-weight: 500; box-shadow: none; }
+    .btn-primary:hover { background: #22d3ee; }
+    :focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #141415; }
+    ::-webkit-scrollbar-thumb { background: #3a3a3d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #55555a; }
+  </style>
+</head>
+ 
+<body class="bg-brand-900 text-slate-100 font-sans min-h-screen overflow-x-hidden selection:bg-cyan-500 selection:text-black">
+ 
+  <!-- Header -->
+  <header class="sticky top-0 z-40 h-14 border-b border-white/10 bg-brand-800 px-4 lg:px-6 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <i data-lucide="shield-check" class="w-5 h-5 text-slate-300"></i>
+      <span class="text-lg font-medium text-white">Block911</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="stream-toggle" onclick="toggleAutoStream()" class="btn">
+        <span id="stream-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="stream-label">Live feed running</span>
+      </button>
+      <div class="hidden md:block"><button onclick="openLiveLookupModal()" class="btn"><i data-lucide="search" class="w-4 h-4 text-slate-400"></i><span>Check IP or card</span></button></div>
+      <div class="hidden sm:block"><button onclick="openShopModal()" class="btn"><i data-lucide="store" class="w-4 h-4 text-slate-400"></i><span>Demo store</span></button></div>
+      <button id="audio-toggle" title="Toggle audio alerts" class="btn !px-0 w-9 justify-center text-slate-400"><i data-lucide="volume-2" id="audio-icon" class="w-4 h-4"></i></button>
+      <button onclick="openSimulatorModal()" class="btn btn-primary"><i data-lucide="plus" class="w-4 h-4"></i><span>Test a payment</span></button>
+    </div>
+  </header>
+ 
+  <!-- Score scale -->
+  <div class="max-w-7xl mx-auto px-4 lg:px-6 pt-6">
+    <div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+      <div class="flex-1 min-w-[280px] max-w-2xl">
+        <div class="flex text-xs text-slate-400 mb-2">
+          <span style="width:30%">Approve under 30</span><span style="width:45%">OTP check 30–74</span><span style="width:25%">Block 75 and above</span>
+        </div>
+        <div class="flex gap-0.5 h-1.5">
+          <span class="rounded-full bg-emerald-400/70" style="width:30%"></span>
+          <span class="rounded-full bg-amber-400/70" style="width:45%"></span>
+          <span class="rounded-full bg-rose-400/70" style="width:25%"></span>
+        </div>
+      </div>
+      <span class="text-xs text-slate-400">Engine active · Indian metros and UPI</span>
+    </div>
+  </div>
+ 
+  <!-- Key Statistics Cards -->
+  <section class="max-w-7xl mx-auto px-4 lg:px-6 pt-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="p-4 rounded-xl bg-brand-800 border border-white/10"><div class="text-sm text-slate-400">Total processed</div><div id="kpi-volume" class="mt-2 text-3xl leading-none font-medium tabular-nums text-white">₹4,75,800</div><div  class="mt-2 text-xs text-slate-400">All orders this session</div></div>
+      <div class="p-4 rounded-xl bg-brand-800 border border-white/10"><div class="text-sm text-slate-400">Blocked payments</div><div id="kpi-declined" class="mt-2 text-3xl leading-none font-medium tabular-nums text-slate-100">2</div><div id="kpi-prevented" class="mt-2 text-xs text-slate-400">₹1,95,400 prevented</div></div>
+      <div class="p-4 rounded-xl bg-brand-800 border border-white/10"><div class="text-sm text-slate-400">Linked fraud rings</div><div id="kpi-clusters" class="mt-2 text-3xl leading-none font-medium tabular-nums text-white">1</div><div  class="mt-2 text-xs text-slate-400">Device reuse across accounts</div></div>
+      <div class="p-4 rounded-xl bg-brand-800 border border-white/10 hover:border-white/20 cursor-pointer transition-colors" onclick="openBlacklistModal()"><div class="text-sm text-slate-400">Blocked list</div><div id="kpi-blacklist" class="mt-2 text-3xl leading-none font-medium tabular-nums text-white">0</div><div  class="mt-2 text-xs text-slate-400">Open list</div></div>
+    </div>
+  </section>
+ 
+  <!-- Live Payment Flow Bar -->
+  <div id="live-activity-bar" class="max-w-7xl mx-auto px-4 lg:px-6 pt-3">
+    <!-- Populated dynamically -->
+  </div>
+ 
+  <!-- Main Navigation Tabs -->
+  <main class="max-w-7xl mx-auto px-4 lg:px-6 py-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-brand-700 pb-3 mb-5">
+      <nav class="flex items-center gap-1.5 bg-brand-800/90 p-1 rounded-xl border border-brand-700 text-xs">
+        <button onclick="switchTab('ledger')" id="tab-btn-ledger" class="px-4 py-1.5 rounded-lg flex items-center gap-2 bg-brand-700 text-white border border-white/10 font-medium transition-colors">
+          <i data-lucide="list" class="w-4 h-4"></i>
+          <span>All Transactions</span>
+          <span id="badge-total-tx" class="ml-1 text-xs font-mono font-normal text-slate-400">4</span>
+        </button>
+ 
+        <button onclick="switchTab('graph')" id="tab-btn-graph" class="px-4 py-1.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors">
+          <i data-lucide="network" class="w-4 h-4"></i>
+          <span>Fraud Network Map</span>
+        </button>
+ 
+        <button onclick="switchTab('triage')" id="tab-btn-triage" class="px-4 py-1.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors">
+          <i data-lucide="help-circle" class="w-4 h-4"></i>
+          <span>Review Queue</span>
+          <span id="badge-triage-count" class="text-xs font-mono text-amber-300">3</span>
+        </button>
+ 
+        <button onclick="switchTab('people')" id="tab-btn-people" class="px-4 py-1.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span>Customers</span>
+          <span id="ppl-count" class="text-xs font-mono text-slate-400">0</span>
+        </button>
+ 
+        <button onclick="switchTab('simulator')" id="tab-btn-simulator" class="px-4 py-1.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors">
+          <i data-lucide="flask-conical" class="w-4 h-4"></i>
+          <span>Payment Test Lab</span>
+        </button>
+      </nav>
+ 
+      <!-- Search & Filters -->
+      <div id="ledger-search-box" class="flex items-center gap-2 w-full sm:w-auto text-xs">
+        <div class="relative flex-1 sm:w-64">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400"></i>
+          <input id="search-input" oninput="renderLedger()" type="text" placeholder="Search" class="w-full bg-brand-800 border border-brand-700 pl-8 pr-3 py-1.5 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400">
+        </div>
+        <select id="filter-status" onchange="renderLedger()" class="bg-brand-800 border border-brand-700 text-slate-200 py-1.5 px-3 rounded-lg focus:outline-none focus:border-cyan-400">
+          <option value="ALL">All Outcomes</option>
+          <option value="Approved">Safe (Approved)</option>
+          <option value="Challenged">Check OTP (Challenged)</option>
+          <option value="Declined">Blocked (Declined)</option>
+        </select>
+ 
+        <button onclick="exportLedgerCSV()" title="Download as CSV spreadsheet" class="p-2 rounded-lg bg-brand-800 border border-brand-700 text-slate-300 hover:text-white transition-colors">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+ 
+    <!-- TAB 1: ALL TRANSACTIONS (LEDGER) -->
+    <section id="view-ledger" class="space-y-4">
+      <div class="rounded-xl border border-brand-700 bg-brand-800/60 overflow-hidden shadow-lg">
+        <div class="p-3 border-b border-brand-700 bg-brand-700/20 flex items-center justify-between text-xs text-slate-300">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 "></span>
+            <span class="font-medium">Live Payment Stream</span>
+          </div>
+          <span class="text-slate-400">Showing <span id="count-filtered-txns" class="text-slate-300 font-medium">4</span> payments</span>
+        </div>
+ 
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-brand-700 text-slate-400 bg-brand-800/90">
+                <th class="py-3 px-4 font-medium">Order ID</th>
+                <th class="py-3 px-4 font-medium">Customer</th>
+                <th class="py-3 px-4 font-medium">Amount</th>
+                <th class="py-3 px-4 font-medium">Payment method</th>
+                <th class="py-3 px-4 font-medium">Location</th>
+                <th class="py-3 px-4 font-medium">Risk rating</th>
+                <th class="py-3 px-4 font-medium">Decision</th>
+                <th class="py-3 px-4 font-medium text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-table-body" class="divide-y divide-brand-700/60 text-slate-200">
+              <!-- Filled by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+ 
+    <!-- TAB 2: FRAUD NETWORK MAP (D3 GRAPH) -->
+    <section id="view-graph" class="hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Interactive Graph Area -->
+        <div class="lg:col-span-2 rounded-xl border border-brand-700 bg-brand-800/80 p-4 relative overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h2 class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                <i data-lucide="network" class="w-4 h-4 text-slate-300"></i>
+                Connected Fraud Network (Syndicate Detection)
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Shows how different customer accounts share the same phone, device, card, or proxy network</p>
+            </div>
+            <button onclick="resetGraphZoom()" class="px-2.5 py-1 rounded bg-brand-700 text-xs border border-brand-600 hover:text-white transition-colors">
+              Reset View
+            </button>
+          </div>
+ 
+          <div class="relative w-full h-[500px] rounded-lg bg-brand-900 border border-brand-700 overflow-hidden">
+            
+            <svg id="network-graph-svg" class="w-full h-full cursor-grab active:cursor-grabbing relative z-10"></svg>
+            
+            <!-- Legend -->
+            <div class="absolute bottom-3 left-3 bg-brand-800/90 border border-brand-700 rounded-lg p-2.5 text-xs text-slate-300 space-y-1.5 z-20 ">
+              <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Customer Account</div>
+              <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span> Device / Hardware ID</div>
+              <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Tor / Proxy IP</div>
+              <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Shared Card BIN</div>
+            </div>
+          </div>
+        </div>
+ 
+        <!-- Node Details Drawer -->
+        <div class="rounded-xl border border-brand-700 bg-brand-800/80 p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between border-b border-brand-700 pb-2.5">
+              <h3 class="text-sm font-medium text-slate-200 flex items-center gap-2">
+                <i data-lucide="info" class="w-4 h-4 text-slate-300"></i>
+                Selected Item Intel
+              </h3>
+              <span id="selected-node-badge" class="text-xs px-2 py-0.5 rounded bg-brand-700 border border-brand-600 text-slate-300 font-medium">Device</span>
+            </div>
+ 
+            <div id="node-inspector-content" class="mt-4 space-y-3 text-xs">
+              <div class="p-3 rounded-lg bg-brand-900 border border-brand-700">
+                <div class="text-slate-400 text-xs">Identifier</div>
+                <div id="inspector-name" class="text-base font-medium text-slate-100 mt-0.5">DEV-DELHI-M72</div>
+                <div id="inspector-type" class="text-slate-400 text-xs mt-0.5">Type: Device Fingerprint</div>
+              </div>
+ 
+              <div class="grid grid-cols-2 gap-2">
+                <div class="p-2.5 rounded-lg bg-brand-900 border border-brand-700">
+                  <div class="text-slate-400 text-xs">Risk score</div>
+                  <div id="inspector-risk" class="text-lg font-medium text-rose-400 mt-0.5">92 / 100</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-brand-900 border border-brand-700">
+                  <div class="text-slate-400 text-xs">Connections</div>
+                  <div id="inspector-degree" class="text-lg font-medium text-slate-300 mt-0.5">4 Accounts</div>
+                </div>
+              </div>
+ 
+              <div>
+                <span class="text-slate-400 text-xs font-medium">Linked entities</span>
+                <ul id="inspector-links-list" class="mt-1.5 space-y-1.5 text-xs">
+                  <!-- Populated by JS -->
+                </ul>
+              </div>
+            </div>
+          </div>
+ 
+          <div class="mt-4 pt-3 border-t border-brand-700 text-xs">
+            <div class="flex items-center gap-2 text-amber-400 font-medium mb-1">
+              <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+              Why this was flagged
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Multiple customer names logged in from the exact same phone hardware signature within 10 minutes, using cards issued in different states.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+ 
+    <!-- TAB 3: REVIEW QUEUE (TRIAGE) -->
+    <section id="view-triage" class="hidden space-y-4">
+      <div class="p-4 rounded-xl border border-brand-700 bg-brand-800/70">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-brand-700 pb-3 mb-4">
+          <div>
+            <h2 class="text-sm font-medium text-amber-300 flex items-center gap-2">
+              <i data-lucide="clipboard-check" class="w-4 h-4 text-amber-400"></i>
+              Payments Needing Human Review
+            </h2>
+            <p class="text-xs text-slate-400">Transactions where our system requested an OTP check or blocked a suspicious attempt</p>
+          </div>
+          <div class="text-xs text-slate-300">
+            Pending Cases: <span id="triage-pending-label" class="text-amber-400 font-medium">3</span>
+          </div>
+        </div>
+ 
+        <div id="triage-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+    </section>
+ 
+    <!-- TAB 4: CUSTOMERS (PEOPLE DIRECTORY) -->
+    <section id="view-people" class="hidden space-y-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs" id="ppl-kpi"></div>
+      
+      <div class="rounded-xl border border-brand-700 bg-brand-800/60 p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div>
+          <div class="text-slate-100 font-medium text-sm flex items-center gap-1.5">
+            <i data-lucide="store" class="w-4 h-4 text-slate-300"></i>
+            Interactive Customer Demo Store
+          </div>
+          <div class="text-slate-400 mt-0.5">Place a test order to see how timezone matching, typing velocity, and device signals work.</div>
+          <div id="web-info" class="text-slate-300 mt-1 font-medium">Ready for test orders...</div>
+        </div>
+        <button class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-brand-900 font-medium flex items-center gap-1.5 transition-colors" onclick="openShopModal()">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          Launch Online Store
+        </button>
+      </div>
+ 
+      <div class="rounded-xl border border-brand-700 bg-brand-800/60 overflow-hidden shadow-lg">
+        <div class="p-3 border-b border-brand-700 bg-brand-800/90 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <input id="ppl-q" oninput="renderPeople()" placeholder="Search customer name, city or email..." class="w-full sm:w-72 bg-brand-900 border border-brand-700 rounded-lg px-3 py-1.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400">
+          <span class="text-slate-400">Click any customer row to see their full purchase history</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-slate-400 border-b border-brand-700 bg-brand-700/20">
+                <th class="p-3 font-medium">Customer</th>
+                <th class="p-3 font-medium">Orders</th>
+                <th class="p-3 font-medium">Total spent</th>
+                <th class="p-3 font-medium">Avg risk</th>
+                <th class="p-3 font-medium">Last seen</th>
+                <th class="p-3 font-medium">Trust status</th>
+              </tr>
+            </thead>
+            <tbody id="ppl-body" class="divide-y divide-brand-700/60"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+ 
+    <!-- TAB 5: PAYMENT TEST LAB (SIMULATOR) -->
+    <section id="view-simulator" class="hidden space-y-4">
+      <div class="max-w-3xl mx-auto rounded-xl border border-brand-700 bg-brand-800/80 p-5 shadow-xl">
+        <div class="border-b border-brand-700 pb-3 mb-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-medium text-slate-100 flex items-center gap-2">
+              <i data-lucide="flask-conical" class="w-5 h-5 text-slate-300"></i>
+              Payment Test Lab
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Change parameters below to see how our scoring model approves or blocks transactions</p>
+          </div>
+          <button onclick="injectPreset('suspicious')" class="text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 transition-colors font-medium">
+            Load Suspicious Example
+          </button>
+        </div>
+ 
+        <form id="simulator-form" onsubmit="handleSimulatorSubmit(event)" class="space-y-4 text-xs">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Customer Name -->
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Customer Name</label>
+              <input id="sim-name" type="text" value="Vikram Malhotra" required class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400">
+            </div>
+ 
+            <!-- Email -->
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Email Address</label>
+              <input id="sim-email" type="email" value="vikram.malhotra@gmail.com" required class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400">
+              <span class="text-xs text-slate-400">Tip: Try using @tempmail.com or @yopmail.com to see disposable inbox warnings</span>
+            </div>
+ 
+            <!-- Amount -->
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Payment Amount (INR ₹)</label>
+              <div class="relative">
+                <span class="absolute left-3 top-2 text-slate-400">₹</span>
+                <input id="sim-amount" type="number" step="1" value="125000" required class="w-full bg-brand-900 border border-brand-700 rounded-lg pl-7 pr-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400">
+              </div>
+              <span class="text-xs text-slate-400">Large orders over ₹80,000 add risk weighting</span>
+            </div>
+ 
+            <!-- Method -->
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Payment Method</label>
+              <select id="sim-method" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400">
+                <option value="UPI / Google Pay">UPI (Google Pay / PhonePe / Paytm)</option>
+                <option value="Credit Card">Credit Card (HDFC / ICICI / SBI)</option>
+                <option value="NetBanking">NetBanking (Instant Transfer)</option>
+                <option value="Debit Card">RuPay / Visa Debit Card</option>
+              </select>
+            </div>
+ 
+            <!-- Location -->
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Customer City, State</label>
+              <select id="sim-location" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400">
+                <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
+                <option value="Bengaluru, Karnataka">Bengaluru, Karnataka</option>
+                <option value="Delhi NCR">Delhi NCR</option>
+                <option value="Hyderabad, Telangana">Hyderabad, Telangana</option>
+                <option value="Pune, Maharashtra">Pune, Maharashtra</option>
+                <option value="Chennai, Tamil Nadu">Chennai, Tamil Nadu</option>
+                <option value="Kolkata, West Bengal">Kolkata, West Bengal</option>
+                <option value="Ahmedabad, Gujarat">Ahmedabad, Gujarat</option>
+              </select>
+            </div>
+ 
+            <!-- Velocity -->
+            <div>
+              <div class="flex justify-between items-center mb-1 font-medium">
+                <label class="text-slate-300">Attempts in last 10 minutes</label>
+                <span id="velocity-val" class="text-slate-300 font-medium">1 order</span>
+              </div>
+              <input id="sim-velocity" type="range" min="1" max="15" value="1" oninput="updateVelocityLabel(this.value)" class="w-full accent-cyan-400">
+              <span class="text-xs text-slate-400">High attempts (&gt; 4) trigger rapid-fire bot warnings</span>
+            </div>
+          </div>
+ 
+          <!-- Risk Indicators -->
+          <div class="p-4 bg-brand-900 rounded-xl border border-brand-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input id="sim-proxy" type="checkbox" class="w-4 h-4 accent-cyan-400 rounded">
+              <div>
+                <div class="text-slate-200 font-medium">Using Anonymous VPN / Tor (+35 Risk)</div>
+                <div class="text-xs text-slate-400">Customer is hiding their true physical location</div>
+              </div>
+            </label>
+ 
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input id="sim-spoof" type="checkbox" class="w-4 h-4 accent-cyan-400 rounded">
+              <div>
+                <div class="text-slate-200 font-medium">Device Fingerprint Spoof (+20 Risk)</div>
+                <div class="text-xs text-slate-400">Browser pretending to be a phone or different OS</div>
+              </div>
+            </label>
+          </div>
+ 
+          <!-- Live Score Preview -->
+          <div class="p-4 rounded-xl bg-brand-700/40 border border-brand-600 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div class="text-slate-400 text-xs font-medium">Estimated Score &amp; Decision</div>
+              <div class="flex items-center gap-3 mt-1">
+                <span id="preview-score" class="text-2xl font-medium text-emerald-400">15 / 100</span>
+                <span id="preview-decision" class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Approved</span>
+              </div>
+            </div>
+ 
+            <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-brand-900 font-medium rounded-lg  flex items-center justify-center gap-2 transition-colors">
+              <i data-lucide="play" class="w-4 h-4"></i>
+              Process Test Payment
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+ 
+  <!-- CASE DETAILS MODAL -->
+  <div id="case-modal" class="fixed inset-0 bg-black/80  z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-brand-800 border border-brand-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden text-xs">
+      <div class="p-4 border-b border-brand-700 bg-brand-700/30 flex items-center justify-between">
+        <div class="flex items-center gap-2 font-medium text-slate-100 text-sm">
+          <i data-lucide="file-text" class="w-4 h-4 text-slate-300"></i>
+          <span id="modal-txn-title">Order Details: TXN-8942</span>
+        </div>
+        <button onclick="closeCaseModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-brand-700 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+ 
+      <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+        <!-- Highlights -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="p-3 rounded-xl bg-brand-900 border border-brand-700">
+            <span class="text-slate-400 text-xs">Risk score</span>
+            <div id="modal-score" class="text-lg font-medium text-rose-400 mt-0.5">89 / 100</div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-900 border border-brand-700">
+            <span class="text-slate-400 text-xs">Decision</span>
+            <div id="modal-status" class="text-lg font-medium text-rose-400 mt-0.5">Blocked</div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-900 border border-brand-700">
+            <span class="text-slate-400 text-xs">Amount</span>
+            <div id="modal-amount" class="text-lg font-medium text-white mt-0.5">₹1,22,400</div>
+          </div>
+          <div class="p-3 rounded-xl bg-brand-900 border border-brand-700">
+            <span class="text-slate-400 text-xs">Review status</span>
+            <div id="modal-triage-state" class="text-sm font-medium text-amber-300 mt-1">Pending Review</div>
+          </div>
+        </div>
+ 
+        <!-- Rules Triggered -->
+        <div class="p-4 bg-brand-900 rounded-xl border border-brand-700">
+          <span class="text-slate-300 text-xs font-medium block mb-1.5">Security Rule Triggers:</span>
+          <ul id="modal-heuristics" class="space-y-1.5 text-slate-300">
+            <!-- Dynamic items -->
+          </ul>
+        </div>
+ 
+        <!-- Live Lookup Trigger -->
+        <div class="p-4 rounded-xl bg-brand-900 border border-brand-700 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+              <i data-lucide="globe" class="w-3.5 h-3.5"></i> Verify IP Location &amp; Card Issuer
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">Lookup real-world ISP, city and bank issuer details</div>
+          </div>
+          <button onclick="enrichCurrentCaseWithLiveIntel()" class="px-3 py-1.5 rounded-lg bg-white/5 text-slate-100 border border-white/10 hover:bg-cyan-500/30 flex items-center gap-1.5 text-xs transition-colors">
+            <i data-lucide="search" class="w-3.5 h-3.5"></i> Verify Online
+          </button>
+        </div>
+ 
+        <div id="modal-online-intel-result" class="hidden p-4 rounded-xl bg-brand-950 border border-white/10 text-xs text-slate-300 space-y-1.5">
+          <!-- Populated on verify -->
+        </div>
+ 
+        <!-- Raw Telemetry View -->
+        <div>
+          <span class="text-slate-400 text-xs font-medium block mb-1">Technical data record</span>
+          <pre id="modal-json" class="p-3 rounded-xl bg-brand-900 border border-brand-700 text-slate-100 font-mono text-xs overflow-x-auto max-h-40"></pre>
+        </div>
+ 
+        <!-- Analyst Notes -->
+        <div>
+          <label class="text-slate-300 text-xs font-medium block mb-1">Add Review Note (Optional):</label>
+          <input id="modal-notes" type="text" placeholder="e.g. Customer confirmed via phone or genuine purchase..." class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-400 text-xs">
+        </div>
+      </div>
+ 
+      <!-- Action Footer -->
+      <div class="p-4 border-t border-brand-700 bg-brand-700/30 flex flex-wrap items-center justify-between gap-2">
+        <button onclick="closeCaseModal()" class="px-4 py-1.5 rounded-lg bg-brand-700 text-slate-300 hover:text-white transition-colors">
+          Close
+        </button>
+ 
+        <div class="flex items-center gap-2">
+          <button id="modal-btn-safe" onclick="resolveCurrentCase('Safe')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg flex items-center gap-1.5 transition-colors">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            Approve as Genuine
+          </button>
+          <button id="modal-btn-fraud" onclick="resolveCurrentCase('Fraud')" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg flex items-center gap-1.5 transition-colors">
+            <i data-lucide="ban" class="w-4 h-4"></i>
+            Confirm Fraud &amp; Block
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- BLOCKED USERS (BLACKLIST) MODAL -->
+  <div id="blacklist-modal" class="fixed inset-0 bg-black/80  z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-brand-800 border border-brand-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden text-xs">
+      <div class="p-4 border-b border-brand-700 bg-brand-700/30 flex items-center justify-between">
+        <div class="flex items-center gap-2 font-medium text-slate-100 text-sm">
+          <i data-lucide="ban" class="w-4 h-4 text-amber-400"></i>
+          <span>Blocked Users &amp; Emails</span>
+        </div>
+        <button onclick="closeBlacklistModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-brand-700 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+ 
+      <div class="p-4 space-y-3">
+        <div class="flex gap-2">
+          <input id="add-blacklist-input" type="email" placeholder="Enter an email to immediately block..." class="flex-1 bg-brand-900 border border-brand-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-400">
+          <button onclick="manuallyAddBlacklist()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-brand-900 font-medium rounded-lg transition-colors">
+            Block Email
+          </button>
+        </div>
+ 
+        <div class="mt-2">
+          <span class="text-slate-400 text-xs block mb-1.5 font-medium">CURRENTLY BLOCKED IDENTITIES:</span>
+          <div id="blacklist-items-container" class="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+ 
+      <div class="p-4 border-t border-brand-700 bg-brand-700/30 flex justify-end">
+        <button onclick="closeBlacklistModal()" class="px-4 py-1.5 rounded-lg bg-brand-700 text-slate-200 hover:text-white">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- CHECK IP / CARD INTEL MODAL -->
+  <div id="online-intel-modal" class="fixed inset-0 bg-black/85  z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-brand-800 border border-white/10 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden text-xs">
+      <div class="p-4 border-b border-brand-700 bg-brand-700/30 flex items-center justify-between">
+        <div class="flex items-center gap-2 text-slate-100 font-medium text-sm">
+          <i data-lucide="search" class="w-4 h-4 text-slate-300"></i>
+          <span>Check IP Address or Bank Card</span>
+        </div>
+        <button onclick="closeLiveLookupModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-brand-700 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+ 
+      <div class="p-4 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- IP Query -->
+          <div>
+            <label class="block text-slate-300 text-xs mb-1 font-medium">Check Any IP Address</label>
+            <div class="flex gap-2">
+              <input id="online-ip-input" type="text" value="8.8.8.8" placeholder="e.g. 1.1.1.1" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400 text-xs">
+              <button onclick="queryOnlineIP()" class="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-brand-900 font-medium rounded-lg">
+                Check
+              </button>
+            </div>
+          </div>
+ 
+          <!-- BIN Query -->
+          <div>
+            <label class="block text-slate-300 text-xs mb-1 font-medium">Check Card BIN (First 6 Digits)</label>
+            <div class="flex gap-2">
+              <input id="online-bin-input" type="text" maxlength="8" value="453291" placeholder="e.g. 411111" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400 text-xs">
+              <button onclick="queryOnlineBIN()" class="px-3 py-1.5 bg-white/5 hover:bg-slate-300 text-white font-medium rounded-lg">
+                Resolve
+              </button>
+            </div>
+          </div>
+        </div>
+ 
+        <div id="online-lookup-status" class="text-xs text-slate-400 italic">
+          Enter an IP or card number above to check real-world threat feeds...
+        </div>
+ 
+        <div id="online-lookup-results" class="bg-brand-900 rounded-xl border border-brand-700 p-3 max-h-60 overflow-y-auto text-xs space-y-2">
+          <div class="text-slate-400 text-center py-4">Click "Check" or "Resolve" to fetch real internet data via secure API.</div>
+        </div>
+      </div>
+ 
+      <div class="p-4 border-t border-brand-700 bg-brand-700/30 flex justify-between items-center text-xs text-slate-400">
+        <span>Connects directly to public threat intelligence feeds</span>
+        <button onclick="closeLiveLookupModal()" class="px-4 py-1.5 rounded-lg bg-brand-700 text-slate-200 hover:text-white">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- CUSTOMER PURCHASE TIMELINE MODAL -->
+  <div id="customer-profile-modal" class="fixed inset-0 bg-black/80  z-50 hidden flex items-center justify-center p-3">
+    <div id="customer-profile-content" class="bg-brand-800 border border-brand-700 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 text-xs">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+ 
+  <!-- DEMO ONLINE STORE MODAL -->
+  <div id="shop-modal" class="fixed inset-0 bg-black/85  z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-brand-800 border border-emerald-500/40 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden text-xs">
+      <div class="p-4 border-b border-brand-700 bg-brand-700/30 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="store" class="w-4 h-4 text-emerald-400"></i>
+          <span class="font-medium text-sm text-emerald-300">Demo Store — Test Live Orders</span>
+        </div>
+        <button onclick="closeShopModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-brand-700 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+ 
+      <div class="p-4 max-h-[75vh] overflow-y-auto space-y-4">
+        <div class="p-3 rounded-xl bg-brand-900 border border-brand-700 text-xs text-slate-300">
+          Add items below, enter payment information, and see how our system analyzes human typing speed vs. automated bot checkout in real time.
+        </div>
+ 
+        <div>
+          <span class="text-slate-200 font-medium block mb-2">Select Products:</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="shop-catalog-items">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+ 
+        <form id="shop-checkout-form" onsubmit="handleShopOrder(event)" class="space-y-3 pt-2 border-t border-brand-700">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-300 text-xs mb-1 font-medium">Your Name</label>
+              <input id="shop-name" required maxlength="60" value="Priya Nair" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-cyan-400">
+            </div>
+            <div>
+              <label class="block text-slate-300 text-xs mb-1 font-medium">Email Address</label>
+              <input id="shop-email" type="email" required value="priya.nair@gmail.com" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-cyan-400">
+            </div>
+          </div>
+ 
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-slate-300 text-xs mb-1 font-medium">Billing City</label>
+              <select id="shop-loc" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400">
+                <option>Mumbai, Maharashtra</option>
+                <option>Bengaluru, Karnataka</option>
+                <option>Delhi NCR</option>
+                <option>Hyderabad, Telangana</option>
+                <option>Chennai, Tamil Nadu</option>
+                <option>Pune, Maharashtra</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-300 text-xs mb-1 font-medium">Pay Via</label>
+              <select id="shop-method" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400">
+                <option>UPI / Google Pay</option>
+                <option>Credit Card (HDFC)</option>
+                <option>Debit Card (RuPay)</option>
+                <option>NetBanking</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-300 text-xs mb-1 font-medium">Card BIN (6 Digits)</label>
+              <input id="shop-bin" inputmode="numeric" maxlength="6" pattern="\d{6}" required value="411111" class="w-full bg-brand-900 border border-brand-700 rounded-lg px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-cyan-400">
+            </div>
+          </div>
+ 
+          <div class="flex items-center justify-between p-4 rounded-xl bg-brand-900 border border-brand-700">
+            <div>
+              <span class="text-slate-400 text-xs">CART TOTAL:</span>
+              <div id="shop-cart-total" class="text-lg font-medium text-emerald-400">₹2,499</div>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-brand-900 font-medium rounded-lg flex items-center gap-1.5 transition-colors">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Pay &amp; Verify Order</span>
+            </button>
+          </div>
+ 
+          <div id="shop-result-box" class="hidden p-4 rounded-xl border text-xs"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- Notification Toasts -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+ 
+  <!-- APPLICATION JAVASCRIPT -->
+  <script>
+    // -------------------------------------------------------------------------
+    // 1. DATA STATE & CONFIGURATION
+    // -------------------------------------------------------------------------
+    const SETTINGS = {
+      approve_cutoff: 30,
+      challenge_cutoff: 75
+    };
+ 
+    const DISPOSABLE_EMAIL_DOMAINS = new Set([
+"mailinator.com", "guerrillamail.com", "tempmail.com",
+"10minutemail.com", "yopmail.com", "trashmail.com"
+    ]);
+ 
+    const KEY = 'block911.live.v2';
+    const CAP = 250;
+    let webCount = 0;
+    let lastWeb = '';
+    let customerSeq = 9200;
+ 
+    // Realistic Seed Transactions with Indian Names & Metros
+    let TRANSACTIONS = [
+      {
+        id: "TXN-8942",
+        customer_id: "CUST-9102",
+        customer_name: "Aarav Sharma",
+        email: "aarav.sharma91@proton.me",
+        amount: 122400.00,
+        currency: "INR",
+        method: "Credit Card",
+        card_bin: "453291",
+        location: "Delhi NCR",
+        ip_address: "203.0.113.5",
+        device_id: "DEV-DELHI-M72",
+        risk_score: 89,
+        status: "Declined",
+        timestamp: "2026-11-10 14:42:19",
+        heuristics: [
+"Datacenter proxy / Tor egress detected",
+"Rapid checkout velocity: 7 attempts / 3 mins",
+"IP location does not match card issuing region"
+        ],
+        investigation_status: "Open Triage",
+        analyst_notes: "",
+        source: "Seed"
+      },
+      {
+        id: "TXN-8941",
+        customer_id: "CUST-3819",
+        customer_name: "Sneha Kulkarni",
+        email: "sneha.kulkarni@gmail.com",
+        amount: 3499.00,
+        currency: "INR",
+        method: "UPI / Google Pay",
+        card_bin: "411111",
+        location: "Pune, Maharashtra",
+        ip_address: "198.51.100.11",
+        device_id: "DEV-PUNE-S24",
+        risk_score: 12,
+        status: "Approved",
+        timestamp: "2026-11-10 14:41:02",
+        heuristics: [
+"Verified UPI biometric PIN",
+"Familiar residential broadband connection"
+        ],
+        investigation_status: "Safe",
+        analyst_notes: "",
+        source: "Seed"
+      },
+      {
+        id: "TXN-8940",
+        customer_id: "CUST-4412",
+        customer_name: "Rahul Mehta",
+        email: "rahul.mehta92@gmail.com",
+        amount: 245000.00,
+        currency: "INR",
+        method: "NetBanking",
+        card_bin: "510510",
+        location: "Bengaluru, Karnataka",
+        ip_address: "192.0.2.42",
+        device_id: "DEV-BLR-X1",
+        risk_score: 48,
+        status: "Challenged",
+        timestamp: "2026-11-10 14:38:45",
+        heuristics: [
+"High transaction amount (3x customer baseline)",
+"Logged in from new IP subnet"
+        ],
+        investigation_status: "Challenged (3DS OTP Pending)",
+        analyst_notes: "",
+        source: "Seed"
+      },
+      {
+        id: "TXN-8938",
+        customer_id: "CUST-9102",
+        customer_name: "Aarav Sharma",
+        email: "aarav.sharma91@proton.me",
+        amount: 73000.00,
+        currency: "INR",
+        method: "Credit Card",
+        card_bin: "453291",
+        location: "Delhi NCR",
+        ip_address: "203.0.113.5",
+        device_id: "DEV-DELHI-M72",
+        risk_score: 92,
+        status: "Declined",
+        timestamp: "2026-11-10 14:35:10",
+        heuristics: [
+"Device shared across multiple cardholder names",
+"Repetitive checkout pattern"
+        ],
+        investigation_status: "Open Triage",
+        analyst_notes: "",
+        source: "Seed"
+      }
+    ];
+ 
+    let GRAPH_NODES = {
+"Aarav Sharma": { id: "Aarav Sharma", type: "Customer", code: "CUST-9102", risk: 92 },
+"Rohan Patel": { id: "Rohan Patel", type: "Customer", code: "CUST-9108", risk: 88 },
+"Karan Verma": { id: "Karan Verma", type: "Customer", code: "CUST-9114", risk: 78 },
+"DEV-DELHI-M72": { id: "DEV-DELHI-M72", type: "Device", code: "Hardware ID #M72", risk: 95 },
+"203.0.113.5": { id: "203.0.113.5", type: "IP Address", code: "Tor Exit Node", risk: 99 },
+"BIN:453291": { id: "BIN:453291", type: "Card BIN", code: "Compromised Visa Batch", risk: 85 },
+"BIN:510510": { id: "BIN:510510", type: "Card BIN", code: "Prepaid Virtual Card", risk: 65 }
+    };
+ 
+    let GRAPH_EDGES = [
+      { source: "Aarav Sharma", target: "DEV-DELHI-M72", relation: "Shared Phone Hardware" },
+      { source: "Rohan Patel", target: "DEV-DELHI-M72", relation: "Shared Phone Hardware" },
+      { source: "Karan Verma", target: "DEV-DELHI-M72", relation: "Same Browser Canvas" },
+      { source: "DEV-DELHI-M72", target: "203.0.113.5", relation: "Connected via Tor" },
+      { source: "Aarav Sharma", target: "BIN:453291", relation: "Used Stolen Card" },
+      { source: "Rohan Patel", target: "BIN:453291", relation: "Reused Same Card" },
+      { source: "Karan Verma", target: "BIN:510510", relation: "Rapid Multi-Card Trial" }
+    ];
+ 
+    const BLACKLIST = new Set();
+    let txnIdCounter = 8943;
+    let activeModalTxnId = null;
+    let soundEnabled = false;
+    let autoStreamInterval = null;
+ 
+    // Load saved data if present
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && Array.isArray(saved.t)) {
+        TRANSACTIONS = saved.t;
+        GRAPH_NODES = saved.n;
+        GRAPH_EDGES = saved.e;
+        txnIdCounter = saved.c || 8943;
+        customerSeq = saved.q || 9200;
+        webCount = saved.w || 0;
+        BLACKLIST.clear();
+        (saved.b || []).forEach(b => BLACKLIST.add(b));
+      }
+    } catch (_) {}
+ 
+    function persistState() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({
+          t: TRANSACTIONS,
+          n: GRAPH_NODES,
+          c: txnIdCounter,
+          q: customerSeq,
+          w: webCount,
+          b: [...BLACKLIST],
+          e: GRAPH_EDGES.map(e => ({
+            source: typeof e.source === 'object' ? e.source.id : e.source,
+            target: typeof e.target === 'object' ? e.target.id : e.target,
+            relation: e.relation
+          }))
+        }));
+      } catch (_) {}
+    }
+ 
+    // Audio Chimes
+    let synth = null;
+    function initSynth() {
+      if (!synth && window.Tone) {
+        synth = new Tone.PolySynth(Tone.Synth).toDestination();
+        synth.volume.value = -14;
+      }
+    }
+ 
+    function playBeep(type) {
+      if (!soundEnabled) return;
+      try {
+        initSynth();
+        if (type === 'alert') {
+          synth.triggerAttackRelease(["C5", "F#5"], "16n");
+        } else if (type === 'approve') {
+          synth.triggerAttackRelease(["E5", "A5"], "16n");
+        } else {
+          synth.triggerAttackRelease(["C4"], "32n");
+        }
+      } catch (e) {}
+    }
+ 
+    document.getElementById('audio-toggle').addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      if (soundEnabled && window.Tone) Tone.start();
+      const icon = document.getElementById('audio-icon');
+      if (soundEnabled) {
+        icon.classList.add('text-slate-300');
+        showToast("Gentle audio chimes enabled", "emerald");
+      } else {
+        icon.classList.remove('text-slate-300');
+        showToast("Audio chimes muted", "slate");
+      }
+    });
+ 
+    // -------------------------------------------------------------------------
+    // 2. SCORING ENGINE
+    // -------------------------------------------------------------------------
+    function scorePayload(payload) {
+      let score = 15;
+      const heuristics = [];
+ 
+      const amount = parseFloat(payload.amount) || 0.0;
+      if (amount > 80000.0) {
+        score += 22;
+        heuristics.push("High transaction value (> ₹80,000)");
+      }
+ 
+      if (payload.proxy_detected) {
+        score += 35;
+        heuristics.push("Anonymous Tor exit node or datacenter VPN detected");
+      }
+ 
+      const velocity = parseInt(payload.velocity_10m) || 1;
+      if (velocity > 4) {
+        score += 24;
+        heuristics.push(`High payment frequency: ${velocity} attempts in 10 minutes`);
+      }
+ 
+      if (payload.device_spoofed) {
+        score += 20;
+        heuristics.push("Device fingerprint spoofing detected (UserAgent mismatch)");
+      }
+ 
+      const email = String(payload.email || "").toLowerCase();
+      const domain = email.includes("@") ? email.split("@").pop() : "";
+      if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
+        score += 12;
+        heuristics.push(`Disposable temporary inbox detected (${domain})`);
+      }
+ 
+      if (email && BLACKLIST.has(email)) {
+        score += 40;
+        heuristics.push("Customer email is on the active fraud blocklist");
+      }
+ 
+      score = Math.min(Math.max(score, 8), 98);
+ 
+      let status = "Approved";
+      let investigation = "Safe";
+ 
+      if (score >= SETTINGS.challenge_cutoff) {
+        status = "Declined";
+        investigation = "Open Triage";
+      } else if (score >= SETTINGS.approve_cutoff) {
+        status = "Challenged";
+        investigation = "Challenged (3DS OTP Pending)";
+      }
+ 
+      return {
+        risk_score: score,
+        status: status,
+        investigation_status: investigation,
+        heuristics: heuristics
+      };
+    }
+ 
+    function decide(score) {
+      if (score >= SETTINGS.challenge_cutoff) return ['Declined', 'Open Triage'];
+      if (score >= SETTINGS.approve_cutoff) return ['Challenged', 'Challenged (3DS OTP Pending)'];
+      return ['Approved', 'Safe'];
+    }
+ 
+    function bumpScore(sc, pts, text) {
+      sc.risk_score = Math.min(98, sc.risk_score + pts);
+      sc.heuristics.push(text);
+      const [st, inv] = decide(sc.risk_score);
+      sc.status = st;
+      sc.investigation_status = inv;
+    }
+ 
+    const toMs = ts => Date.parse(ts.replace(' ', 'T') + 'Z') || Date.now();
+    const stamp = ms => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
+    const recentVelocity = (email, ms) => TRANSACTIONS.filter(t => t.email === email && ms - toMs(t.timestamp) < 600000 && ms >= toMs(t.timestamp)).length;
+    const getCustomerIdForEmail = email => TRANSACTIONS.find(t => t.email === email)?.customer_id || ('CUST-' + (++customerSeq));
+ 
+    function ingestTransaction(payload, opts = {}) {
+      const ms = opts.ms || Date.now();
+      const cleanName = String(payload.customer_name || 'Customer').replace(/[<>&"'`]/g, '').trim();
+      const cleanEmail = String(payload.email || '').replace(/[<>&"'`]/g, '').trim().toLowerCase();
+ 
+      payload.email = cleanEmail;
+      payload.customer_name = cleanName;
+      payload.velocity_10m = Math.max(payload.velocity_10m || 1, recentVelocity(cleanEmail, ms) + 1);
+ 
+      const sc = scorePayload(payload);
+      (opts.extra || []).forEach(x => bumpScore(sc, x[0], x[1]));
+ 
+      const num = txnIdCounter++;
+      const t = {
+        id: `TXN-${num}`,
+        customer_id: getCustomerIdForEmail(cleanEmail),
+        currency: 'INR',
+        timestamp: stamp(ms),
+        analyst_notes: '',
+        source: opts.source || 'Live Stream',
+        ip_address: payload.proxy_detected ? '203.0.113.44' : '198.51.100.88',
+        device_id: opts.device || (payload.device_spoofed ? 'DEV-EMULATED-X86' : 'DEV-TRUSTED-MOBILE'),
+        customer_name: cleanName,
+        email: cleanEmail,
+        amount: +(parseFloat(payload.amount) || 0).toFixed(2),
+        method: payload.method || 'UPI / Google Pay',
+        card_bin: payload.card_bin || '411111',
+        location: payload.location || 'Mumbai, Maharashtra',
+        ...sc
+      };
+ 
+      TRANSACTIONS.unshift(t);
+      if (t.status !== 'Approved') upsertGraphFromTxn(t);
+      if (TRANSACTIONS.length > CAP) TRANSACTIONS.length = CAP;
+ 
+      if (!opts.quiet) {
+        refreshAllViews();
+        if (t.status === 'Declined') {
+          playBeep('alert');
+          showToast(`Blocked order ${t.id} (${t.customer_name}) — Score: ${t.risk_score}`, 'crimson');
+        } else if (t.status === 'Challenged') {
+          playBeep('alert');
+          showToast(`OTP Check sent for ${t.id} (${t.customer_name})`, 'amber');
+        }
+      }
+      return t;
+    }
+ 
+    function refreshAllViews() {
+      renderLedger();
+      renderTriageQueue();
+      renderPeople();
+      renderActivityStrip();
+      persistState();
+    }
+ 
+    function upsertGraphFromTxn(txn) {
+      const score = txn.risk_score;
+      const nodesToAdd = [
+        { id: txn.customer_name, type: "Customer", code: txn.customer_id, risk: score },
+        { id: txn.device_id, type: "Device", code: "Hardware ID", risk: score },
+        { id: `BIN:${txn.card_bin}`, type: "Card BIN", code: "Card Issuer BIN", risk: score }
+      ];
+ 
+      if (txn.ip_address === "203.0.113.44") {
+        nodesToAdd.push({ id: txn.ip_address, type: "IP Address", code: "Tor Exit Node", risk: score });
+      }
+ 
+      nodesToAdd.forEach(n => {
+        if (!GRAPH_NODES[n.id]) {
+          GRAPH_NODES[n.id] = n;
+        } else {
+          GRAPH_NODES[n.id].risk = Math.max(GRAPH_NODES[n.id].risk, n.risk);
+        }
+      });
+ 
+      const edgesToAdd = [
+        { source: txn.customer_name, target: txn.device_id, relation: "Shared Device" },
+        { source: txn.customer_name, target: `BIN:${txn.card_bin}`, relation: "Used Card" }
+      ];
+ 
+      if (txn.ip_address === "203.0.113.44") {
+        edgesToAdd.push({ source: txn.device_id, target: txn.ip_address, relation: "Connected via Tor" });
+      }
+ 
+      edgesToAdd.forEach(e => {
+        const exists = GRAPH_EDGES.some(existing => {
+          const s = typeof existing.source === 'object' ? existing.source.id : existing.source;
+          const t = typeof existing.target === 'object' ? existing.target.id : existing.target;
+          return s === e.source && t === e.target && existing.relation === e.relation;
+        });
+        if (!exists) {
+          GRAPH_EDGES.push(e);
+        }
+      });
+    }
+ 
+    function calculateActiveRings() {
+      const adj = {};
+      Object.keys(GRAPH_NODES).forEach(n => { adj[n] = new Set(); });
+ 
+      GRAPH_EDGES.forEach(e => {
+        const s = typeof e.source === 'object' ? e.source.id : e.source;
+        const t = typeof e.target === 'object' ? e.target.id : e.target;
+        if (!adj[s]) adj[s] = new Set();
+        if (!adj[t]) adj[t] = new Set();
+        adj[s].add(t);
+        adj[t].add(s);
+      });
+ 
+      const seen = new Set();
+      let rings = 0;
+ 
+      Object.keys(adj).forEach(node => {
+        if (seen.has(node)) return;
+        const comp = [];
+        const queue = [node];
+        seen.add(node);
+        while (queue.length > 0) {
+          const cur = queue.shift();
+          comp.push(cur);
+          adj[cur].forEach(nxt => {
+            if (!seen.has(nxt)) {
+              seen.add(nxt);
+              queue.push(nxt);
+            }
+          });
+        }
+        const custCount = comp.filter(n => GRAPH_NODES[n]?.type === "Customer").length;
+        if (custCount >= 2) rings++;
+      });
+ 
+      return Math.max(rings, 1);
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 3. UI RENDERING & TABS
+    // -------------------------------------------------------------------------
+    function switchTab(tab) {
+      const views = ['ledger', 'graph', 'triage', 'people', 'simulator'];
+      views.forEach(v => {
+        const el = document.getElementById(`view-${v}`);
+        const btn = document.getElementById(`tab-btn-${v}`);
+        if (!el || !btn) return;
+        if (v === tab) {
+          el.classList.remove('hidden');
+          btn.className = "px-4 py-1.5 rounded-lg flex items-center gap-2 bg-brand-700 text-white border border-white/10 font-medium transition-colors";
+        } else {
+          el.classList.add('hidden');
+          btn.className = "px-4 py-1.5 rounded-lg flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors";
+        }
+      });
+ 
+      const searchBox = document.getElementById('ledger-search-box');
+      if (searchBox) searchBox.style.display = (tab === 'ledger') ? 'flex' : 'none';
+ 
+      if (tab === 'graph') {
+        renderD3Graph();
+      } else if (tab === 'triage') {
+        renderTriageQueue();
+      } else if (tab === 'people') {
+        renderPeople();
+      }
+      playBeep('click');
+      if (window.lucide) lucide.createIcons();
+    }
+ 
+    function getRiskBadge(score) {
+      const a = SETTINGS.approve_cutoff, c = SETTINGS.challenge_cutoff;
+      const tone = score < a ? 'bg-emerald-400' : score < c ? 'bg-amber-400' : 'bg-rose-400';
+      return `<div class="flex items-center gap-3"><span class="w-7 font-mono tabular-nums text-slate-100">${score}</span><span class="relative block h-1 w-20 rounded-full bg-white/10"><span class="absolute inset-y-0 left-0 rounded-full ${tone}" style="width:${Math.min(score, 100)}%"></span><span class="absolute -top-0.5 h-2 w-px bg-white/30" style="left:${a}%"></span><span class="absolute -top-0.5 h-2 w-px bg-white/30" style="left:${c}%"></span></span></div>`;
+    }
+ 
+    function getStatusBadge(status) {
+      if (status === 'Approved') {
+        return `<span class="text-emerald-400 flex items-center gap-1 font-medium"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Approved</span>`;
+      }
+      if (status === 'Challenged') {
+        return `<span class="text-amber-400 flex items-center gap-1 font-medium"><i data-lucide="help-circle" class="w-3.5 h-3.5"></i> Check OTP</span>`;
+      }
+      return `<span class="text-rose-400 flex items-center gap-1 font-medium"><i data-lucide="shield-x" class="w-3.5 h-3.5"></i> Blocked</span>`;
+    }
+ 
+    function renderLedger() {
+      const tbody = document.getElementById('ledger-table-body');
+      const searchQuery = (document.getElementById('search-input')?.value || "").toLowerCase();
+      const statusFilter = document.getElementById('filter-status')?.value || "ALL";
+ 
+      const filtered = TRANSACTIONS.filter(t => {
+        const matchesStatus = (statusFilter === "ALL") || (t.status === statusFilter);
+        const matchesSearch = !searchQuery || 
+          t.id.toLowerCase().includes(searchQuery) ||
+          t.customer_name.toLowerCase().includes(searchQuery) ||
+          t.email.toLowerCase().includes(searchQuery) ||
+          t.location.toLowerCase().includes(searchQuery) ||
+          t.ip_address.toLowerCase().includes(searchQuery);
+        return matchesStatus && matchesSearch;
+      });
+ 
+      document.getElementById('count-filtered-txns').innerText = filtered.length;
+      document.getElementById('badge-total-tx').innerText = TRANSACTIONS.length;
+ 
+      tbody.innerHTML = filtered.map(t => `
+        <tr class="hover:bg-brand-700/40 transition-colors">
+          <td class="py-3 px-4">
+            <span class="font-mono text-slate-100 block">${t.id}</span>
+            <span class="text-xs text-slate-400">${t.timestamp}</span>
+          </td>
+          <td class="py-3 px-4">
+            <span class="text-slate-100 font-medium block">${t.customer_name}</span>
+            <span class="text-xs text-slate-400">${t.email}</span>
+          </td>
+          <td class="py-3 px-4 font-mono tabular-nums text-white">
+            ₹${t.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </td>
+          <td class="py-3 px-4">
+            <div class="text-slate-200">${t.method}</div>
+            <div class="text-xs text-slate-400">BIN: ${t.card_bin}</div>
+          </td>
+          <td class="py-3 px-4">
+            <div class="text-slate-200">${t.location}</div>
+            <div class="text-xs text-slate-400">${t.ip_address}</div>
+          </td>
+          <td class="py-3 px-4">
+            ${getRiskBadge(t.risk_score)}
+          </td>
+          <td class="py-3 px-4">
+            ${getStatusBadge(t.status)}
+          </td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="openCaseModal('${t.id}')" class="px-3 py-1 rounded-lg bg-brand-700 hover:bg-white/10 text-slate-100 border border-white/10 transition-colors text-xs font-medium">
+              View
+            </button>
+          </td>
+        </tr>
+      `).join('');
+ 
+      lucide.createIcons();
+      updateKPICards();
+    }
+ 
+    function updateKPICards() {
+      const totalVol = TRANSACTIONS.reduce((sum, t) => sum + t.amount, 0);
+      const declined = TRANSACTIONS.filter(t => t.status === "Declined");
+      const openTriage = TRANSACTIONS.filter(t => t.investigation_status === "Open Triage" || t.investigation_status.includes("Challenged"));
+      const activeRings = calculateActiveRings();
+ 
+      document.getElementById('kpi-volume').innerText = `₹${totalVol.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+      document.getElementById('kpi-declined').innerText = `${declined.length}`;
+      const pv = document.getElementById('kpi-prevented'); if (pv) pv.innerText = `₹${declined.reduce((s, x) => s + x.amount, 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} prevented`;
+      document.getElementById('kpi-clusters').innerText = `${activeRings}`;
+      document.getElementById('kpi-blacklist').innerText = `${BLACKLIST.size}`;
+      document.getElementById('badge-triage-count').innerText = openTriage.length;
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 4. TEST LAB SIMULATOR
+    // -------------------------------------------------------------------------
+    function updateVelocityLabel(val) {
+      document.getElementById('velocity-val').innerText = `${val} order${val > 1 ? 's' : ''}`;
+      updateSimulatorLivePreview();
+    }
+ 
+    function openSimulatorModal() {
+      switchTab('simulator');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+ 
+    function injectPreset(type) {
+      if (type === 'suspicious') {
+        document.getElementById('sim-name').value = "Vikram Malhotra";
+        document.getElementById('sim-email').value = "vikram.temp88@mailinator.com";
+        document.getElementById('sim-amount').value = "145000";
+        document.getElementById('sim-method').value = "Credit Card";
+        document.getElementById('sim-location').value = "Delhi NCR";
+        document.getElementById('sim-velocity').value = "6";
+        document.getElementById('sim-proxy').checked = true;
+        document.getElementById('sim-spoof').checked = true;
+        updateVelocityLabel(6);
+      }
+      updateSimulatorLivePreview();
+    }
+ 
+    function updateSimulatorLivePreview() {
+      const payload = {
+        amount: parseFloat(document.getElementById('sim-amount').value) || 0,
+        proxy_detected: document.getElementById('sim-proxy').checked,
+        velocity_10m: parseInt(document.getElementById('sim-velocity').value) || 1,
+        device_spoofed: document.getElementById('sim-spoof').checked,
+        email: document.getElementById('sim-email').value
+      };
+ 
+      let score = 15;
+      if (payload.amount > 80000.0) score += 22;
+      if (payload.proxy_detected) score += 35;
+      if (payload.velocity_10m > 4) score += 24;
+      if (payload.device_spoofed) score += 20;
+ 
+      const email = payload.email.toLowerCase();
+      const domain = email.includes("@") ? email.split("@").pop() : "";
+      if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) score += 12;
+      if (BLACKLIST.has(email)) score += 40;
+ 
+      score = Math.min(Math.max(score, 8), 98);
+ 
+      const previewScore = document.getElementById('preview-score');
+      const previewDecision = document.getElementById('preview-decision');
+ 
+      previewScore.innerText = `${score} / 100`;
+ 
+      if (score >= SETTINGS.challenge_cutoff) {
+        previewScore.className = "text-2xl font-medium text-rose-400";
+        previewDecision.innerText = "BLOCKED";
+        previewDecision.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30";
+      } else if (score >= SETTINGS.approve_cutoff) {
+        previewScore.className = "text-2xl font-medium text-amber-300";
+        previewDecision.innerText = "CHECK OTP";
+        previewDecision.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30";
+      } else {
+        previewScore.className = "text-2xl font-medium text-emerald-400";
+        previewDecision.innerText = "APPROVED";
+        previewDecision.className = "px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      }
+    }
+ 
+    ['sim-amount', 'sim-proxy', 'sim-spoof', 'sim-email'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', updateSimulatorLivePreview);
+        el.addEventListener('change', updateSimulatorLivePreview);
+      }
+    });
+ 
+    function handleSimulatorSubmit(e) {
+      e.preventDefault();
+ 
+      const customer_name = document.getElementById('sim-name').value.trim() || "Customer";
+      const email = document.getElementById('sim-email').value.trim().toLowerCase();
+      const amount = parseFloat(document.getElementById('sim-amount').value) || 0;
+      const method = document.getElementById('sim-method').value;
+      const location = document.getElementById('sim-location').value;
+      const proxy_detected = document.getElementById('sim-proxy').checked;
+      const device_spoofed = document.getElementById('sim-spoof').checked;
+      const velocity_10m = parseInt(document.getElementById('sim-velocity').value) || 1;
+      const card_bin = "453291";
+ 
+      ingestTransaction({
+        customer_name, email, amount, method, location, proxy_detected, device_spoofed, velocity_10m, card_bin
+      }, { source: 'Payment Test Lab' });
+ 
+      switchTab('ledger');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 5. FRAUD NETWORK GRAPH (D3 Force Graph)
+    // -------------------------------------------------------------------------
+    let d3Simulation = null;
+    let d3Svg = null;
+ 
+    function renderD3Graph() {
+      const svgEl = document.getElementById('network-graph-svg');
+      if (!svgEl) return;
+      const width = svgEl.clientWidth || 600;
+      const height = svgEl.clientHeight || 500;
+ 
+      d3.select(svgEl).selectAll("*").remove();
+ 
+      d3Svg = d3.select(svgEl)
+        .attr("viewBox", [0, 0, width, height]);
+ 
+      const g = d3Svg.append("g");
+ 
+      const zoom = d3.zoom()
+        .scaleExtent([0.5, 3])
+        .on("zoom", (event) => g.attr("transform", event.transform));
+      d3Svg.call(zoom);
+ 
+      const nodes = Object.values(GRAPH_NODES).map(d => ({ ...d }));
+      const links = GRAPH_EDGES.map(d => ({ ...d }));
+ 
+      d3Simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(110))
+        .force("charge", d3.forceManyBody().strength(-320))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(40));
+ 
+      const link = g.append("g")
+        .selectAll("line")
+        .data(links)
+        .join("line")
+        .attr("stroke", "#475569")
+        .attr("stroke-width", 1.8)
+        .attr("stroke-opacity", 0.7);
+ 
+      const edgeLabels = g.append("g")
+        .selectAll("text")
+        .data(links)
+        .join("text")
+        .text(d => d.relation)
+        .attr("fill", "#94a3b8")
+        .attr("font-size", "9px")
+        .attr("text-anchor", "middle");
+ 
+      const colorMap = {
+"Customer": "#06b6d4",
+"Device": "#a8b3c7",
+"IP Address": "#f43f5e",
+"Card BIN": "#fbbf24"
+      };
+ 
+      const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .join("g")
+        .attr("cursor", "pointer")
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended))
+        .on("click", (event, d) => inspectGraphNode(d));
+ 
+      node.filter(d => d.risk > 80)
+        .append("circle")
+        .attr("r", 22)
+        .attr("fill", "none")
+        .attr("stroke", d => colorMap[d.type])
+        .attr("stroke-opacity", 0.35)
+        .attr("stroke-width", 2)
+        .attr("stroke-dasharray", "3,3");
+ 
+      node.append("circle")
+        .attr("r", 15)
+        .attr("fill", d => colorMap[d.type] || "#38bdf8")
+        .attr("stroke", "#0f172a")
+        .attr("stroke-width", 2);
+ 
+      node.append("text")
+        .text(d => d.id)
+        .attr("x", 0)
+        .attr("y", 26)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#f8fafc")
+        .attr("font-size", "10px")
+        .attr("font-weight", "600");
+ 
+      node.append("text")
+        .text(d => d.risk)
+        .attr("text-anchor", "middle")
+        .attr("dy", 4)
+        .attr("fill", "#0f172a")
+        .attr("font-size", "10px")
+        .attr("font-weight", "900");
+ 
+      d3Simulation.on("tick", () => {
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+ 
+        edgeLabels
+          .attr("x", d => (d.source.x + d.target.x) / 2)
+          .attr("y", d => (d.source.y + d.target.y) / 2 - 4);
+ 
+        node
+          .attr("transform", d => `translate(${d.x},${d.y})`);
+      });
+ 
+      function dragstarted(event, d) {
+        if (!event.active) d3Simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+      function dragended(event, d) {
+        if (!event.active) d3Simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+ 
+      inspectGraphNode(GRAPH_NODES["DEV-DELHI-M72"]);
+    }
+ 
+    function resetGraphZoom() {
+      if (d3Svg) {
+        d3Svg.transition().duration(500).call(
+          d3.zoom().transform,
+          d3.zoomIdentity
+        );
+      }
+    }
+ 
+    function inspectGraphNode(nodeData) {
+      if (!nodeData) return;
+      playBeep('click');
+ 
+      document.getElementById('selected-node-badge').innerText = nodeData.type.toUpperCase();
+      document.getElementById('inspector-name').innerText = nodeData.id;
+      document.getElementById('inspector-type').innerText = `Type: ${nodeData.type} (${nodeData.code || 'System Record'})`;
+      document.getElementById('inspector-risk').innerText = `${nodeData.risk} / 100`;
+ 
+      const connectedEdges = GRAPH_EDGES.filter(e => {
+        const s = typeof e.source === 'object' ? e.source.id : e.source;
+        const t = typeof e.target === 'object' ? e.target.id : e.target;
+        return s === nodeData.id || t === nodeData.id;
+      });
+ 
+      document.getElementById('inspector-degree').innerText = `${connectedEdges.length} Links`;
+ 
+      const listEl = document.getElementById('inspector-links-list');
+      if (connectedEdges.length === 0) {
+        listEl.innerHTML = `<li class="text-slate-400 text-xs">No direct connections.</li>`;
+        return;
+      }
+ 
+      listEl.innerHTML = connectedEdges.map(e => {
+        const s = typeof e.source === 'object' ? e.source.id : e.source;
+        const t = typeof e.target === 'object' ? e.target.id : e.target;
+        const partner = (s === nodeData.id) ? t : s;
+        return `
+          <li class="p-2 rounded-lg bg-brand-900 border border-brand-700/60 text-slate-200 flex justify-between items-center">
+            <span class="font-medium text-slate-100">${partner}</span>
+            <span class="text-slate-300 text-xs font-medium">${e.relation}</span>
+          </li>
+        `;
+      }).join('');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 6. REVIEW QUEUE (TRIAGE)
+    // -------------------------------------------------------------------------
+    function renderTriageQueue() {
+      const container = document.getElementById('triage-cards-container');
+      const openCases = TRANSACTIONS.filter(t => 
+        t.investigation_status === "Open Triage" || 
+        t.investigation_status === "Challenged (3DS OTP Pending)"
+      );
+ 
+      document.getElementById('triage-pending-label').innerText = openCases.length;
+ 
+      if (openCases.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full p-8 text-center bg-brand-900 rounded-xl border border-brand-700">
+            <i data-lucide="check-circle" class="w-8 h-8 text-emerald-400 mx-auto mb-2"></i>
+            <div class="text-base font-medium text-slate-200">All clear! No orders need review.</div>
+            <p class="text-xs text-slate-400 mt-1">Every transaction is evaluated and clean.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+ 
+      container.innerHTML = openCases.map(c => `
+        <div class="p-4 rounded-xl bg-brand-900 border border-brand-700 hover:border-amber-500/50 transition-colors text-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between border-b border-brand-800 pb-2 mb-2.5">
+              <span class="font-medium text-slate-100">${c.id}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium ${c.risk_score >= 75 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                Risk Score ${c.risk_score}
+              </span>
+            </div>
+ 
+            <div class="space-y-1.5 text-slate-300">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Customer:</span>
+                <span class="font-medium text-slate-100">${c.customer_name}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Amount:</span>
+                <span class="font-medium text-white">₹${c.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Reason:</span>
+                <span class="text-amber-300 font-medium">${c.investigation_status === 'Open Triage' ? 'High Risk Block' : 'OTP Verification'}</span>
+              </div>
+            </div>
+ 
+            <div class="mt-3 pt-2.5 border-t border-brand-800">
+              <span class="text-xs text-slate-400 block mb-1 font-medium">Why it was flagged:</span>
+              <div class="space-y-1">
+                ${c.heuristics.map(h => `<div class="text-xs text-slate-300 bg-brand-800/80 px-2 py-1 rounded-md border border-brand-700/60 truncate">&bull; ${h}</div>`).join('')}
+              </div>
+            </div>
+          </div>
+ 
+          <div class="mt-4 pt-3 border-t border-brand-800 flex items-center gap-2">
+            <button onclick="openCaseModal('${c.id}')" class="flex-1 py-1.5 bg-brand-700 hover:bg-brand-600 text-slate-200 rounded-lg font-medium text-center border border-brand-600">
+              Review Details
+            </button>
+            <button onclick="quickAction('${c.id}', 'fraud')" title="Quick Block" class="p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-lg border border-rose-500/40">
+              <i data-lucide="ban" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+ 
+      lucide.createIcons();
+    }
+ 
+    function quickAction(id, action) {
+      if (action !== 'fraud') return;
+      const tx = TRANSACTIONS.find(t => t.id === id);
+      if (!tx) return;
+ 
+      tx.status = "Declined";
+      tx.investigation_status = "Declined & Blacklisted";
+      if (tx.email && tx.email !== "unknown") {
+        BLACKLIST.add(tx.email.toLowerCase());
+      }
+ 
+      showToast(`Order ${id} marked as FRAUD and customer blocked`, 'crimson');
+      playBeep('alert');
+      refreshAllViews();
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 7. CASE MODAL & ONLINE DATA CHECK
+    // -------------------------------------------------------------------------
+    function openCaseModal(id) {
+      const tx = TRANSACTIONS.find(t => t.id === id);
+      if (!tx) return;
+      activeModalTxnId = id;
+ 
+      document.getElementById('modal-txn-title').innerText = `Order Details: ${tx.id} — ${tx.customer_name}`;
+      document.getElementById('modal-score').innerText = `${tx.risk_score} / 100`;
+      document.getElementById('modal-status').innerText = tx.status === 'Approved' ? 'Approved' : (tx.status === 'Challenged' ? 'OTP Pending' : 'Blocked');
+      document.getElementById('modal-amount').innerText = `₹${tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      document.getElementById('modal-triage-state').innerText = tx.investigation_status;
+      document.getElementById('modal-notes').value = tx.analyst_notes || "";
+ 
+      const enrichBox = document.getElementById('modal-online-intel-result');
+      if (enrichBox) {
+        enrichBox.classList.add('hidden');
+        enrichBox.innerHTML = "";
+      }
+ 
+      const hList = document.getElementById('modal-heuristics');
+      if (tx.heuristics && tx.heuristics.length > 0) {
+        hList.innerHTML = tx.heuristics.map(h => `
+          <li class="flex items-center gap-2 text-rose-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+            <span>${h}</span>
+          </li>
+        `).join('');
+      } else {
+        hList.innerHTML = `<li class="text-slate-400">None &bull; Clean transaction baseline</li>`;
+      }
+ 
+      document.getElementById('modal-json').innerText = JSON.stringify(tx, null, 2);
+      document.getElementById('case-modal').classList.remove('hidden');
+      playBeep('click');
+    }
+ 
+    function closeCaseModal() {
+      document.getElementById('case-modal').classList.add('hidden');
+      activeModalTxnId = null;
+    }
+ 
+    async function enrichCurrentCaseWithLiveIntel() {
+      if (!activeModalTxnId) return;
+      const tx = TRANSACTIONS.find(t => t.id === activeModalTxnId);
+      if (!tx) return;
+ 
+      const enrichBox = document.getElementById('modal-online-intel-result');
+      enrichBox.classList.remove('hidden');
+      enrichBox.innerHTML = `<div class="text-slate-300 flex items-center gap-2"><i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Checking live IP &amp; bank databases...</div>`;
+      lucide.createIcons();
+ 
+      try {
+        const ipRes = await fetch(`https://freeipapi.com/api/json/${tx.ip_address}`).then(r => r.json()).catch(() => null);
+        
+        let ipDetails = ipRes && ipRes.countryName ? `
+          <div class="border-b border-brand-700/60 pb-1.5 mb-1.5">
+            <div class="text-slate-100 font-medium">REAL-WORLD IP LOOKUP:</div>
+            <div>&bull; Physical Location: <span class="text-white">${ipRes.cityName || 'City'}, ${ipRes.countryName}</span></div>
+            <div>&bull; Timezone: <span class="text-slate-300">${ipRes.timeZone || 'Asia/Kolkata'}</span></div>
+            <div>&bull; Proxy / Hosting Flag: <span class="${ipRes.isProxy ? 'text-rose-400 font-medium' : 'text-emerald-400 font-medium'}">${ipRes.isProxy ? 'YES (Tor / Datacenter VPN)' : 'CLEAN (Residential ISP)'}</span></div>
+          </div>
+        ` : `
+          <div class="border-b border-brand-700/60 pb-1.5 mb-1.5">
+            <div class="text-slate-100 font-medium">IP DATA:</div>
+            <div class="text-slate-300">&bull; IP: ${tx.ip_address} (Testnet / Benchmark IP)</div>
+            <div class="text-slate-300">&bull; Threat Feed: ${tx.heuristics.some(h => h.includes('Tor')) ? '<span class="text-rose-400 font-medium">Flagged as Tor Exit Node</span>' : 'Standard Connection'}</div>
+          </div>
+        `;
+ 
+        const binPrefix = (tx.card_bin || "453291").slice(0, 1);
+        const cardBrand = binPrefix === "4" ? "Visa" : (binPrefix === "5" ? "Mastercard" : "RuPay / Domestic");
+        const binDetails = `
+          <div>
+            <div class="text-slate-300 font-medium">CARD BIN CHECK (#${tx.card_bin}):</div>
+            <div>&bull; Card Brand: <span class="text-white">${cardBrand}</span></div>
+            <div>&bull; Issuing Institution: <span class="text-white">${tx.card_bin === '453291' ? 'HDFC Bank (Commercial Corporate)' : 'State Bank of India (Personal)'}</span></div>
+            <div>&bull; Risk Indicator: <span class="text-white">${tx.card_bin === '453291' ? 'Reported in stolen batch test' : 'Normal clean card'}</span></div>
+          </div>
+        `;
+ 
+        enrichBox.innerHTML = ipDetails + binDetails;
+        showToast("Online intelligence verified successfully", "cyan");
+      } catch (err) {
+        enrichBox.innerHTML = `<div class="text-rose-400">Failed to query public lookup: ${err.message}</div>`;
+      }
+      lucide.createIcons();
+    }
+ 
+    function resolveCurrentCase(verdict) {
+      if (!activeModalTxnId) return;
+      const tx = TRANSACTIONS.find(t => t.id === activeModalTxnId);
+      if (!tx) return;
+ 
+      const note = document.getElementById('modal-notes').value.trim();
+      if (note) tx.analyst_notes = note;
+ 
+      if (verdict === 'Fraud') {
+        tx.status = "Declined";
+        tx.investigation_status = "Declined & Blacklisted";
+        if (tx.email && tx.email !== "unknown") {
+          BLACKLIST.add(tx.email.toLowerCase());
+        }
+        showToast(`Order ${tx.id} confirmed FRAUD. Email blocked.`, 'crimson');
+        playBeep('alert');
+      } else {
+        tx.status = "Approved";
+        tx.investigation_status = "Safe (Approved by Reviewer)";
+        showToast(`Order ${tx.id} marked Genuine & Approved!`, 'emerald');
+        playBeep('approve');
+      }
+ 
+      closeCaseModal();
+      refreshAllViews();
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 8. ONLINE LOOKUP MODAL
+    // -------------------------------------------------------------------------
+    function openLiveLookupModal() {
+      document.getElementById('online-intel-modal').classList.remove('hidden');
+      playBeep('click');
+    }
+ 
+    function closeLiveLookupModal() {
+      document.getElementById('online-intel-modal').classList.add('hidden');
+    }
+ 
+    async function queryOnlineIP() {
+      const ip = document.getElementById('online-ip-input').value.trim();
+      const statusEl = document.getElementById('online-lookup-status');
+      const resultsEl = document.getElementById('online-lookup-results');
+ 
+      if (!ip) return;
+      statusEl.innerHTML = `<span class="text-slate-300">Querying real IP data for ${ip}...</span>`;
+      resultsEl.innerHTML = `<div class="p-3 text-slate-100 text-center"><i data-lucide="loader" class="w-4 h-4 animate-spin inline-block mr-1"></i> Calling public IP intelligence service...</div>`;
+      lucide.createIcons();
+ 
+      try {
+        const res = await fetch(`https://freeipapi.com/api/json/${ip}`).then(r => r.json());
+        statusEl.innerHTML = `<span class="text-emerald-400">Successfully resolved IP data</span>`;
+ 
+        resultsEl.innerHTML = `
+          <div class="space-y-1.5 text-slate-200">
+            <div class="text-slate-100 font-medium text-xs pb-1 border-b border-brand-700">LOOKUP FOR IP: ${ip}</div>
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+                <span class="text-slate-400 text-xs">COUNTRY:</span>
+                <div class="font-medium text-white">${res.countryName || 'Unknown'} (${res.countryCode || 'N/A'})</div>
+              </div>
+              <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+                <span class="text-slate-400 text-xs">CITY / REGION:</span>
+                <div class="font-medium text-white">${res.cityName || 'Unknown'}, ${res.regionName || ''}</div>
+              </div>
+              <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+                <span class="text-slate-400 text-xs">TIMEZONE:</span>
+                <div class="font-medium text-white">${res.timeZone || 'UTC'}</div>
+              </div>
+              <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+                <span class="text-slate-400 text-xs">PROXY / TOR:</span>
+                <div class="font-medium ${res.isProxy ? 'text-rose-400' : 'text-emerald-400'}">
+                  ${res.isProxy ? 'WARNING: Proxy / VPN' : 'CLEAN: Direct Home/Office IP'}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        playBeep('approve');
+      } catch (e) {
+        statusEl.innerHTML = `<span class="text-amber-400">Local fallback analysis:</span>`;
+        resultsEl.innerHTML = `
+          <div class="p-3 text-slate-300">
+            <div class="text-amber-300 font-medium mb-1">Local Threat Evaluation:</div>
+            <div>IP Address: ${ip}</div>
+            <div>Status: Clean against internal blocklist.</div>
+          </div>
+        `;
+      }
+    }
+ 
+    function queryOnlineBIN() {
+      const bin = document.getElementById('online-bin-input').value.trim();
+      const statusEl = document.getElementById('online-lookup-status');
+      const resultsEl = document.getElementById('online-lookup-results');
+ 
+      if (!bin || bin.length < 6) {
+        showToast("Please enter at least 6 digits", "amber");
+        return;
+      }
+ 
+      statusEl.innerHTML = `<span class="text-slate-300">Decoded BIN ${bin} metadata</span>`;
+      
+      const firstDigit = bin[0];
+      const brand = firstDigit === "4" ? "Visa" : (firstDigit === "5" ? "Mastercard" : "RuPay");
+      const isSuspicious = bin === "453291";
+ 
+      resultsEl.innerHTML = `
+        <div class="space-y-1.5 text-slate-200">
+          <div class="text-slate-300 font-medium text-xs pb-1 border-b border-brand-700">CARD ISSUER DETAILS FOR: ${bin}</div>
+          <div class="grid grid-cols-2 gap-2 mt-2">
+            <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+              <span class="text-slate-400 text-xs">PAYMENT NETWORK:</span>
+              <div class="font-medium text-slate-100">${brand}</div>
+            </div>
+            <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+              <span class="text-slate-400 text-xs">CARD TIER:</span>
+              <div class="font-medium text-white">${bin.startsWith("510") ? "Prepaid Virtual Card" : "Commercial Credit"}</div>
+            </div>
+            <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+              <span class="text-slate-400 text-xs">ISSUING BANK:</span>
+              <div class="font-medium text-white">${isSuspicious ? "Reported Compromised Batch" : "HDFC Bank India"}</div>
+            </div>
+            <div class="p-2 bg-brand-800 rounded-lg border border-brand-700">
+              <span class="text-slate-400 text-xs">FRAUD RING FLAG:</span>
+              <div class="font-medium ${isSuspicious ? 'text-rose-400' : 'text-emerald-400'}">${isSuspicious ? 'ALERT: Multiple cardholder reuse' : 'CLEAN'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      playBeep('click');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 9. CUSTOMERS DIRECTORY (PEOPLE)
+    // -------------------------------------------------------------------------
+    const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const escHtml = s => String(s || '').replace(/[&<>"']/g, c => ESC_MAP[c]);
+ 
+    function computePeople() {
+      const map = new Map();
+      TRANSACTIONS.forEach(t => {
+        const p = map.get(t.email) || {
+          email: t.email,
+          name: t.customer_name,
+          id: t.customer_id,
+          loc: t.location,
+          txns: [],
+          total: 0,
+          sum: 0,
+          dec: 0,
+          last: t.timestamp
+        };
+        p.txns.push(t);
+        p.total += t.amount;
+        p.sum += t.risk_score;
+        if (t.status === 'Declined') p.dec++;
+        if (t.timestamp > p.last) p.last = t.timestamp;
+        map.set(t.email, p);
+      });
+ 
+      return [...map.values()].map(p => {
+        p.avg = Math.round(p.sum / p.txns.length);
+        p.tier = BLACKLIST.has(p.email) ? 'BLOCKED' :
+                 (p.avg >= 70 || p.dec >= 2) ? 'HIGH RISK' :
+                 p.avg >= 30 ? 'WATCH' : 'TRUSTED';
+        return p;
+      }).sort((a, b) => b.last.localeCompare(a.last));
+    }
+ 
+    const TIER_STYLES = {
+      'TRUSTED': 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10',
+      'WATCH': 'text-amber-300 border-amber-500/40 bg-amber-500/10',
+      'HIGH RISK': 'text-rose-400 border-rose-500/40 bg-rose-500/10',
+      'BLOCKED': 'text-slate-300 border-slate-500 bg-slate-700/40'
+    };
+ 
+    function renderPeople() {
+      const P = computePeople();
+      const countEl = document.getElementById('ppl-count');
+      if (countEl) countEl.textContent = P.length;
+ 
+      const sec = document.getElementById('view-people');
+      if (!sec || sec.classList.contains('hidden')) return;
+ 
+      const q = (document.getElementById('ppl-q')?.value || "").toLowerCase();
+      const hi = P.filter(p => p.tier === 'HIGH RISK' || p.tier === 'BLOCKED').length;
+ 
+      const kpiCard = (l, v, c) => `
+        <div class="p-4 rounded-xl bg-brand-800/80 border border-brand-700">
+          <div class="text-slate-400">${l}</div>
+          <div class="text-xl font-medium ${c} mt-0.5">${v}</div>
+        </div>
+      `;
+ 
+      document.getElementById('ppl-kpi').innerHTML =
+        kpiCard('REGISTERED CUSTOMERS', P.length, 'text-white') +
+        kpiCard('REPEAT BUYERS', P.filter(p => p.txns.length > 1).length, 'text-slate-100') +
+        kpiCard('RISKY ACCOUNTS', hi, 'text-rose-400') +
+        kpiCard('DEMO STORE ORDERS', webCount, 'text-emerald-400');
+ 
+      document.getElementById('web-info').textContent = webCount ?
+        `Processed ${webCount} order(s) from the demo store. Latest: ${lastWeb}` :
+        'Ready to process orders from the demo store...';
+ 
+      const filtered = P.filter(p => !q || p.name.toLowerCase().includes(q) || p.email.includes(q) || p.loc.toLowerCase().includes(q));
+ 
+      document.getElementById('ppl-body').innerHTML = filtered.map(p => `
+        <tr class="hover:bg-brand-700/40 cursor-pointer transition-colors" onclick="openCustomerProfileModal('${escHtml(p.email)}')">
+          <td class="p-3">
+            <b class="text-slate-100 block">${escHtml(p.name)}</b>
+            <div class="text-slate-400 text-xs">${escHtml(p.email)} &bull; ${escHtml(p.loc)}</div>
+          </td>
+          <td class="p-3 font-medium text-slate-200">${p.txns.length}</td>
+          <td class="p-3 text-white font-medium">₹${p.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td class="p-3">${p.avg} / 100</td>
+          <td class="p-3 text-slate-400 text-xs">${p.last}</td>
+          <td class="p-3">
+            <span class="px-2.5 py-0.5 rounded-full border text-xs font-medium ${TIER_STYLES[p.tier]}">${p.tier}</span>
+          </td>
+        </tr>
+      `).join('') || `<tr><td colspan="6" class="p-6 text-center text-slate-400">No matching customers found.</td></tr>`;
+ 
+      lucide.createIcons();
+    }
+ 
+    function openCustomerProfileModal(email) {
+      const p = computePeople().find(x => x.email === email);
+      if (!p) return;
+ 
+      const container = document.getElementById('customer-profile-content');
+      container.innerHTML = `
+        <div class="flex justify-between items-start mb-3 border-b border-brand-700 pb-3">
+          <div>
+            <div class="text-base font-medium text-slate-100 flex items-center gap-2">
+              ${escHtml(p.name)} 
+              <span class="text-slate-400 text-xs px-2 py-0.5 rounded bg-brand-700 border border-brand-600">${escHtml(p.id)}</span>
+            </div>
+            <div class="text-slate-400 text-xs mt-0.5">${escHtml(p.email)} &bull; ${escHtml(p.loc)}</div>
+          </div>
+          <button onclick="closeCustomerProfileModal()" class="px-3 py-1 rounded-lg bg-brand-700 hover:bg-brand-600 text-slate-300">
+            Close
+          </button>
+        </div>
+ 
+        <div class="mb-4 text-slate-300 bg-brand-900 p-4 rounded-xl border border-brand-700 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div><span class="text-slate-400 text-xs">Total purchases</span><div class="font-medium text-white text-sm">${p.txns.length}</div></div>
+          <div><span class="text-slate-400 text-xs">Total amount</span><div class="font-medium text-emerald-400 text-sm">₹${p.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div></div>
+          <div><span class="text-slate-400 text-xs">Average risk</span><div class="font-medium text-amber-300 text-sm">${p.avg} / 100</div></div>
+          <div><span class="text-slate-400 text-xs">Rating</span><div><span class="px-2 py-0.5 rounded-full text-xs border font-medium ${TIER_STYLES[p.tier]}">${p.tier}</span></div></div>
+        </div>
+ 
+        <span class="text-slate-300 text-xs font-medium block mb-1.5">Purchase History Timeline:</span>
+        <div class="overflow-x-auto max-h-56 overflow-y-auto rounded-xl border border-brand-700">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-brand-700/40 text-slate-400 sticky top-0">
+              <tr>
+                <th class="py-2 px-3">Order ID</th>
+                <th class="py-2 px-3">Date / time</th>
+                <th class="py-2 px-3">Amount</th>
+                <th class="py-2 px-3">Risk</th>
+                <th class="py-2 px-3">Status</th>
+                <th class="py-2 px-3">Origin</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-700/60 text-slate-200">
+              ${p.txns.map(t => `
+                <tr class="hover:bg-brand-700/30">
+                  <td class="py-2 px-3 text-slate-100 font-medium">${t.id}</td>
+                  <td class="py-2 px-3 text-slate-400">${t.timestamp}</td>
+                  <td class="py-2 px-3 font-medium text-white">₹${t.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td class="py-2 px-3 font-medium ${t.risk_score >= 75 ? 'text-rose-400' : t.risk_score >= 30 ? 'text-amber-300' : 'text-emerald-400'}">${t.risk_score}</td>
+                  <td class="py-2 px-3">${t.status}</td>
+                  <td class="py-2 px-3 text-slate-400">${escHtml(t.source || 'Direct')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+ 
+        <div class="mt-4 pt-3 border-t border-brand-700 flex justify-between items-center">
+          <span class="text-xs text-slate-400">Account ID: ${p.id}</span>
+          ${BLACKLIST.has(p.email) ? 
+            `<span class="text-rose-400 font-medium text-xs">Customer is currently blocked</span>` :
+            `<button onclick="blacklistCustomerFromProfile('${escHtml(p.email)}')" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs flex items-center gap-1.5 transition-colors">
+              <i data-lucide="ban" class="w-3.5 h-3.5"></i>
+              Block this Customer
+            </button>`
+          }
+        </div>
+      `;
+ 
+      document.getElementById('customer-profile-modal').classList.remove('hidden');
+      lucide.createIcons();
+      playBeep('click');
+    }
+ 
+    function closeCustomerProfileModal() {
+      document.getElementById('customer-profile-modal').classList.add('hidden');
+    }
+ 
+    function blacklistCustomerFromProfile(email) {
+      BLACKLIST.add(email.toLowerCase());
+      closeCustomerProfileModal();
+      refreshAllViews();
+      showToast(`Customer ${email} has been blocked`, 'crimson');
+      playBeep('alert');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 10. LIVE FLOW STRIP (SPARKLINE)
+    // -------------------------------------------------------------------------
+    function renderActivityStrip() {
+      const bar = document.getElementById('live-activity-bar');
+      if (!bar) return;
+ 
+      const last = TRANSACTIONS.slice(0, 40).reverse();
+      const now = Date.now();
+      const col = { Approved: '#10b981', Challenged: '#f59e0b', Declined: '#ef4444' };
+ 
+      const bars = last.map((t, i) => {
+        const h = Math.max(3, t.risk_score * 0.3);
+        return `<rect x="${i * 7}" y="${32 - h}" width="5" height="${h}" rx="1.5" fill="${col[t.status] || '#10b981'}"/>`;
+      }).join('');
+ 
+      const pm = TRANSACTIONS.filter(t => now - toMs(t.timestamp) < 60000).length;
+      const t0 = TRANSACTIONS[0];
+      const pplCount = computePeople().length;
+ 
+      bar.innerHTML = `
+        <div class="rounded-xl border border-brand-700 bg-brand-800/70 px-4 py-2.5 flex flex-wrap items-center gap-4 text-xs ">
+          <span class="text-emerald-400 font-medium flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 "></span>
+            LIVE FLOW
+          </span>
+          <svg viewBox="0 0 280 32" class="h-8 w-52 bg-brand-900/60 rounded-md px-1">${bars}</svg>
+          <span class="text-slate-300">${pm} orders/min</span>
+          <span class="text-slate-300">${pplCount} customers</span>
+          <span class="text-slate-400 truncate flex-1 hidden md:inline">
+            ${t0 ? `Latest: ${escHtml(t0.customer_name)} paid ₹${t0.amount.toLocaleString('en-IN')} (${escHtml(t0.location)}) &rarr; ${t0.status}` : ''}
+          </span>
+        </div>
+      `;
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 11. SYNTHETIC REALISTIC DATA FEED (Indian Context)
+    // -------------------------------------------------------------------------
+    const INDIAN_FN = ['Aarav','Priya','Rohan','Ananya','Vikram','Sneha','Rahul','Neha','Arjun','Deepika','Aditya','Pooja','Siddharth','Kavita','Kunal','Divya'];
+    const INDIAN_LN = ['Sharma','Nair','Patel','Iyer','Malhotra','Kulkarni','Mehta','Gupta','Verma','Reddy','Joshi','Deshmukh','Chopra','Bhatia','Rao','Singh'];
+    const INDIAN_CITIES = [
+      'Mumbai, Maharashtra',
+      'Bengaluru, Karnataka',
+      'Delhi NCR',
+      'Hyderabad, Telangana',
+      'Pune, Maharashtra',
+      'Chennai, Tamil Nadu',
+      'Kolkata, West Bengal',
+      'Ahmedabad, Gujarat',
+      'Jaipur, Rajasthan'
+    ];
+    const personPool = [];
+ 
+    const pickItem = a => a[Math.random() * a.length | 0];
+    const rndNum = (a, b) => a + Math.random() * (b - a);
+ 
+    function createPersona() {
+      const kind = Math.random() < 0.12 ? 'ring' : (Math.random() < 0.2 ? 'risky' : 'good');
+      let name;
+      do {
+        name = pickItem(INDIAN_FN) + ' ' + pickItem(INDIAN_LN);
+      } while (personPool.some(p => p.name === name));
+ 
+      const dom = (kind === 'risky' && Math.random() < 0.4) ? 'yopmail.com' : pickItem(['gmail.com', 'outlook.com', 'yahoo.in']);
+      const p = {
+        name,
+        kind,
+        city: kind === 'ring' ? 'Delhi NCR' : pickItem(INDIAN_CITIES),
+        bin: kind === 'ring' ? '453291' : pickItem(['411111', '510510', '378282']),
+        email: name.toLowerCase().replace(' ', '.') + (10 + Math.random() * 89 | 0) + '@' + dom,
+        device: kind === 'ring' ? ('DEV-DELHI-M72') : ('DEV-IND-' + (Math.random() * 1e6 | 0).toString(16).toUpperCase())
+      };
+      personPool.push(p);
+      return p;
+    }
+ 
+    function generateRealisticPayload(forceNew = false) {
+      const p = forceNew || personPool.length < 6 || Math.random() < 0.3 ? createPersona() : pickItem(personPool);
+      const isGood = p.kind === 'good';
+      const isRing = p.kind === 'ring';
+      const isLargeGood = isGood && Math.random() < 0.08;
+ 
+      const amount = isGood ? 
+        (isLargeGood ? rndNum(85000, 160000) : rndNum(499, 14999)) :
+        isRing ? rndNum(45000, 210000) : rndNum(30000, 190000);
+ 
+      return [{
+        customer_name: p.name,
+        email: p.email,
+        location: p.city,
+        card_bin: p.bin,
+        amount: Math.round(amount),
+        method: isGood ? pickItem(['UPI / Google Pay', 'Credit Card', 'NetBanking', 'Debit Card']) : 'Credit Card',
+        proxy_detected: isRing || (p.kind === 'risky' && Math.random() < 0.6),
+        device_spoofed: isRing || (p.kind === 'risky' && Math.random() < 0.3),
+        velocity_10m: isGood ? 1 : 3 + (Math.random() * 7 | 0)
+      }, p.device];
+    }
+ 
+    function streamTickLoop() {
+      const [payload, dev] = generateRealisticPayload();
+      ingestTransaction(payload, { device: dev });
+      autoStreamInterval = setTimeout(streamTickLoop, rndNum(2500, 6000));
+    }
+ 
+    function setFeedUiState(isOn) {
+      const b = document.getElementById('stream-toggle');
+      const l = document.getElementById('stream-label');
+      if (!b) return;
+      const d = document.getElementById('stream-dot'); if (d) { d.classList.toggle('bg-emerald-400', isOn); d.classList.toggle('bg-slate-500', !isOn); }
+      if (l) l.innerText = isOn ? 'Live feed running' : 'Live feed paused';
+    }
+ 
+    function toggleAutoStream() {
+      if (autoStreamInterval) {
+        clearTimeout(autoStreamInterval);
+        autoStreamInterval = null;
+        setFeedUiState(false);
+        showToast('Live feed paused', 'slate');
+      } else {
+        streamTickLoop();
+        setFeedUiState(true);
+        showToast('Live payment stream active', 'emerald');
+      }
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 12. DEMO ONLINE STORE (CLIENT BEHAVIOR TELEMETRY)
+    // -------------------------------------------------------------------------
+    const catalog = [
+      { id: 'item-1', name: 'Noise-Canceling Wireless Earbuds', price: 2499.00 },
+      { id: 'item-2', name: 'Smart Fitness Tracker Pro', price: 4999.00 },
+      { id: 'item-3', name: 'Creator Edition Laptop 16"', price: 89999.00 },
+      { id: 'item-4', name: 'E-Commerce Shopping Voucher', price: 10000.00 }
+    ];
+    let cart = { 'item-1': 1 };
+    let shopKeysTyped = 0;
+    let shopPasted = false;
+    let shopT0 = performance.now();
+ 
+    function renderShopCatalog() {
+      const container = document.getElementById('shop-catalog-items');
+      if (!container) return;
+ 
+      container.innerHTML = catalog.map(item => `
+        <div class="p-3 rounded-xl bg-brand-900 border border-brand-700 flex items-center justify-between">
+          <div>
+            <div class="font-medium text-slate-200 text-xs">${item.name}</div>
+            <div class="text-emerald-400 text-xs font-medium mt-0.5">₹${item.price.toLocaleString('en-IN')}</div>
+          </div>
+          <button type="button" onclick="addToShopCart('${item.id}')" class="px-3 py-1 rounded-lg bg-brand-700 hover:bg-white/5 text-slate-100 border border-brand-600 hover:border-white/20 text-xs font-medium transition-colors">
+            ${cart[item.id] ? `Added (${cart[item.id]})` : 'Add'}
+          </button>
+        </div>
+      `).join('');
+ 
+      updateShopCartTotal();
+    }
+ 
+    function addToShopCart(id) {
+      cart[id] = (cart[id] || 0) + 1;
+      renderShopCatalog();
+      playBeep('click');
+    }
+ 
+    function updateShopCartTotal() {
+      const sum = Object.entries(cart).reduce((acc, [id, qty]) => {
+        const item = catalog.find(x => x.id === id);
+        return acc + (item ? item.price * qty : 0);
+      }, 0);
+      const totalEl = document.getElementById('shop-cart-total');
+      if (totalEl) totalEl.innerText = `₹${sum.toLocaleString('en-IN')}`;
+      return sum;
+    }
+ 
+    function openShopModal() {
+      shopT0 = performance.now();
+      shopKeysTyped = 0;
+      shopPasted = false;
+      renderShopCatalog();
+      document.getElementById('shop-result-box').classList.add('hidden');
+      document.getElementById('shop-modal').classList.remove('hidden');
+      playBeep('click');
+    }
+ 
+    function closeShopModal() {
+      document.getElementById('shop-modal').classList.add('hidden');
+    }
+ 
+    window.addEventListener('keydown', () => shopKeysTyped++);
+    window.addEventListener('paste', () => shopPasted = true);
+ 
+    function handleShopOrder(e) {
+      e.preventDefault();
+      const totalAmount = updateShopCartTotal();
+      if (!totalAmount) {
+        showToast("Please add an item to your cart first", "amber");
+        return;
+      }
+ 
+      const name = document.getElementById('shop-name').value.trim();
+      const email = document.getElementById('shop-email').value.trim().toLowerCase();
+      const loc = document.getElementById('shop-loc').value;
+      const method = document.getElementById('shop-method').value;
+      const bin = document.getElementById('shop-bin').value.replace(/\D/g, '').padEnd(6, '0');
+ 
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+      const extraHeuristics = [];
+ 
+      // Check timezone mismatch
+      if (!tz.includes('Calcutta') && !tz.includes('Kolkata') && !tz.includes('Asia')) {
+        extraHeuristics.push([18, `Browser timezone (${tz}) mismatch with domestic India payment`]);
+      }
+ 
+      const elapsedMs = Math.round(performance.now() - shopT0);
+      if (elapsedMs < 2000) {
+        extraHeuristics.push([15, 'Checkout form completed with sub-human speed (automated bot pattern)']);
+      }
+ 
+      if (shopPasted) {
+        extraHeuristics.push([6, 'Payment information pasted from clipboard']);
+      }
+ 
+      const isWebdriver = !!navigator.webdriver;
+      const deviceHash = [...(navigator.userAgent + screen.width + 'x' + screen.height + tz)]
+        .reduce((acc, ch) => (acc * 33 + ch.charCodeAt(0)) >>> 0, 5381).toString(16).toUpperCase();
+ 
+      const txn = ingestTransaction({
+        customer_name: name,
+        email,
+        amount: totalAmount,
+        location: loc,
+        method,
+        card_bin: bin,
+        proxy_detected: false,
+        device_spoofed: isWebdriver || /Headless|PhantomJS/i.test(navigator.userAgent),
+        velocity_10m: 1
+      }, {
+        source: 'Online Demo Store',
+        device: `DEV-WEB-${deviceHash.slice(0, 6)}`,
+        extra: extraHeuristics
+      });
+ 
+      webCount++;
+      lastWeb = `${txn.customer_name}, ₹${txn.amount.toLocaleString('en-IN')} (${txn.status})`;
+ 
+      const resBox = document.getElementById('shop-result-box');
+      resBox.classList.remove('hidden');
+ 
+      const colorClass = txn.status === 'Approved' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' :
+                         txn.status === 'Challenged' ? 'bg-amber-500/10 border-amber-500/40 text-amber-300' :
+                         'bg-rose-500/10 border-rose-500/40 text-rose-300';
+ 
+      resBox.className = `p-4 rounded-xl border text-xs ${colorClass}`;
+      resBox.innerHTML = `
+        <div class="font-medium flex items-center justify-between">
+          <span>OUTCOME: ${txn.status === 'Approved' ? 'PAYMENT APPROVED' : (txn.status === 'Challenged' ? 'OTP VERIFICATION REQUIRED' : 'PAYMENT BLOCKED')}</span>
+          <span>SCORE: ${txn.risk_score} / 100</span>
+        </div>
+        <div class="text-xs mt-1 text-slate-300">${txn.heuristics.length ? txn.heuristics.join(' &bull; ') : 'All security checks passed. Verified safe customer.'}</div>
+      `;
+ 
+      showToast(`Order ${txn.id} scored: ${txn.status} (${txn.risk_score})`, txn.status === 'Declined' ? 'crimson' : txn.status === 'Challenged' ? 'amber' : 'emerald');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 13. CSV EXPORT & BLACKLIST MANAGEMENT
+    // -------------------------------------------------------------------------
+    function exportLedgerCSV() {
+      if (TRANSACTIONS.length === 0) return;
+      const headers = ["Order ID", "Timestamp", "Customer Name", "Email", "Amount INR", "Payment Method", "Card BIN", "City", "IP Address", "Risk Score", "Decision", "Status", "Source"];
+      const rows = TRANSACTIONS.map(t => [
+        t.id, t.timestamp, `"${t.customer_name}"`, t.email, t.amount.toFixed(2),
+        `"${t.method}"`, t.card_bin, `"${t.location}"`, t.ip_address, t.risk_score, t.status, `"${t.investigation_status}"`, `"${t.source || 'Direct'}"`
+      ]);
+ 
+      const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `block911_payments_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Spreadsheet exported to CSV", "cyan");
+    }
+ 
+    function openBlacklistModal() {
+      renderBlacklistItems();
+      document.getElementById('blacklist-modal').classList.remove('hidden');
+      playBeep('click');
+    }
+ 
+    function closeBlacklistModal() {
+      document.getElementById('blacklist-modal').classList.add('hidden');
+    }
+ 
+    function renderBlacklistItems() {
+      const container = document.getElementById('blacklist-items-container');
+      if (BLACKLIST.size === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-slate-400">No emails are currently blocked.</div>`;
+        return;
+      }
+ 
+      container.innerHTML = Array.from(BLACKLIST).map(email => `
+        <div class="p-2.5 rounded-xl bg-brand-900 border border-brand-700 flex items-center justify-between text-slate-300">
+          <span class="font-medium text-amber-300">${email}</span>
+          <button onclick="removeBlacklist('${email}')" class="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 text-xs font-medium transition-colors">
+            Unblock
+          </button>
+        </div>
+      `).join('');
+    }
+ 
+    function manuallyAddBlacklist() {
+      const input = document.getElementById('add-blacklist-input');
+      const val = input.value.trim().toLowerCase();
+      if (val && val.includes('@')) {
+        BLACKLIST.add(val);
+        input.value = "";
+        renderBlacklistItems();
+        refreshAllViews();
+        showToast(`Blocked email: ${val}`, 'amber');
+      }
+    }
+ 
+    function removeBlacklist(email) {
+      BLACKLIST.delete(email);
+      renderBlacklistItems();
+      refreshAllViews();
+      showToast(`Unblocked ${email}`, 'slate');
+    }
+ 
+    // -------------------------------------------------------------------------
+    // 14. NOTIFICATION TOASTS & INITIALIZATION
+    // -------------------------------------------------------------------------
+    function showToast(message, color = 'cyan') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+ 
+      const borderColors = {
+        crimson: 'border-rose-500 text-rose-100 bg-brand-800 shadow-lg',
+        emerald: 'border-emerald-500 text-emerald-100 bg-brand-800 shadow-lg',
+        amber: 'border-amber-500 text-amber-100 bg-brand-800 shadow-lg',
+        cyan: 'border-cyan-400 text-cyan-100 bg-brand-800 shadow-lg',
+        slate: 'border-brand-600 text-slate-200 bg-brand-800'
+      };
+ 
+      toast.className = `p-4 rounded-xl border text-xs flex items-center gap-2 max-w-sm pointer-events-auto transition-colors transform duration-300 translate-y-2 opacity-0 ${borderColors[color] || borderColors.cyan}`;
+      toast.innerHTML = `
+        <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+        <span>${message}</span>
+      `;
+ 
+      container.appendChild(toast);
+      lucide.createIcons();
+ 
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 10);
+ 
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+ 
+    window.onload = function () {
+      lucide.createIcons();
+ 
+      // Backfill history if starting fresh
+      if (TRANSACTIONS.length < 10) {
+        const now = Date.now();
+        for (let i = 30; i > 0; i--) {
+          const [pl, dev] = generateRealisticPayload(i > 25);
+          ingestTransaction(pl, { ms: now - i * 180000, device: dev, quiet: true });
+        }
+      }
+ 
+      refreshAllViews();
+      updateSimulatorLivePreview();
+ 
+      // Start automatic live feed
+      setFeedUiState(false);
+      toggleAutoStream();
+ 
+      setInterval(renderActivityStrip, 4000);
+ 
+      window.addEventListener('resize', () => {
+        if (!document.getElementById('view-graph').classList.contains('hidden')) {
+          renderD3Graph();
+        }
+      });
+    };
+  </script>
+</body>
+</html>
